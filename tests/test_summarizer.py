@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import json
 from pathlib import Path
@@ -217,14 +217,14 @@ def test_summarize_repo_cli_exits_one_when_no_artifact_dir(tmp_path: Path) -> No
     """Should exit with code 1 when .repo_intelligence/ does not exist."""
     result = runner.invoke(app, ["summarize-repo", "--path", str(tmp_path)])
     assert result.exit_code == 1
-    assert ".repo_intelligence" in result.output or "scan-next" in result.output
+    assert ".repo_intelligence" in result.output or "scan-repo" in result.output
 
 
 # ── CLI: scan-next auto-generates repo_summary.json ──────────────────────────
 
 
 def test_scan_next_auto_generates_summary(nextjs_scan_repo: Path) -> None:
-    result = runner.invoke(app, ["scan-next", "--path", str(nextjs_scan_repo)])
+    result = runner.invoke(app, ["scan-repo", "--path", str(nextjs_scan_repo)])
 
     assert result.exit_code == 0
     summary_file = nextjs_scan_repo / _OUTPUT_DIR / "repo_summary.json"
@@ -232,7 +232,7 @@ def test_scan_next_auto_generates_summary(nextjs_scan_repo: Path) -> None:
 
 
 def test_scan_next_summary_has_correct_shape(nextjs_scan_repo: Path) -> None:
-    runner.invoke(app, ["scan-next", "--path", str(nextjs_scan_repo)])
+    runner.invoke(app, ["scan-repo", "--path", str(nextjs_scan_repo)])
 
     summary_file = nextjs_scan_repo / _OUTPUT_DIR / "repo_summary.json"
     data = json.loads(summary_file.read_text(encoding="utf-8"))

@@ -1,6 +1,6 @@
 # CLI Reference
 
-AICA provides 8 commands via the `aica` entry point.
+AICA provides 7 commands via the `aica` entry point.
 
 ```bash
 aica --help
@@ -58,17 +58,18 @@ aica version
 
 ### `aica scan-repo`
 
-Deep-scan a repository. Runs all 17 detectors, writes all intelligence files to `.repo_intelligence/`, and displays a summary table.
+Deep-scan a repository. Runs all 17 detectors, writes all 16 intelligence files to `.repo_intelligence/`, and displays a summary table. Add `--verbose` to also render per-entity tables in the terminal.
 
 ```bash
-aica scan-repo [--path PATH]
+aica scan-repo [--path PATH] [--verbose]
 ```
 
 **Options:**
 
-| Option   | Type   | Default           | Description                         |
-| -------- | ------ | ----------------- | ----------------------------------- |
-| `--path` | `Path` | current directory | Path to the repository root to scan |
+| Option      | Type   | Default           | Description                                                                                                                                                                          |
+| ----------- | ------ | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `--path`    | `Path` | current directory | Path to the repository root to scan                                                                                                                                                  |
+| `--verbose` | flag   | off               | Render per-entity rich tables (framework, routes, components, services, database, packages, stores, tRPC, i18n, auth, server modules, agent runtime, env vars, hooks, scripts, libs) |
 
 **Output files written to `<path>/.repo_intelligence/`:**
 
@@ -103,47 +104,8 @@ aica scan-repo
 # Scan a specific repo
 aica scan-repo --path /projects/my-app
 
-# Scan and write outputs
-aica scan-repo --path D:\repos\my-nextjs-app
-```
-
----
-
-### `aica scan-next`
-
-Verbose deep-scan optimised for **Next.js App Router** repositories. Writes the same `.repo_intelligence/` files as `scan-repo` but renders rich per-entity tables in the terminal.
-
-```bash
-aica scan-next [--path PATH]
-```
-
-**Options:**
-
-| Option   | Type   | Default           | Description                         |
-| -------- | ------ | ----------------- | ----------------------------------- |
-| `--path` | `Path` | current directory | Path to the Next.js repository root |
-
-**Rich panels displayed:**
-
-| Panel            | Fields shown                                                             |
-| ---------------- | ------------------------------------------------------------------------ |
-| Framework        | `framework`, `language`, `app_router`, `next_version`, `package_manager` |
-| Source structure | Directory tree                                                           |
-| Config files     | List of detected config files                                            |
-| Routes           | `route`, `type`, `methods`, `file`                                       |
-| Components       | `name`, `file`, `props`                                                  |
-| Services         | `service`, `file`, `exported_functions`                                  |
-| Database         | `orm`, `schema`, `models`                                                |
-| Packages         | `ui`, `database`, `auth`, `state`                                        |
-
-**Examples:**
-
-```bash
-# Scan a Next.js repo with verbose output
-aica scan-next --path /projects/my-nextjs-app
-
-# Scan current directory (must be a Next.js project)
-aica scan-next
+# Scan with per-entity tables
+aica scan-repo --path /projects/my-app --verbose
 ```
 
 ---
@@ -201,7 +163,7 @@ aica summarize-repo --path /projects/my-app
 
 ### `aica index-code`
 
-Index Python source files in the target workspace and save a structured index to `.aica/index.json`. Uses Python AST parsing — no LLM required.
+Run full TypeScript/TSX **AST analysis** on all `.ts` and `.tsx` files using tree-sitter. Writes seven JSON files to `.repo_intelligence/ast/` — no LLM required.
 
 ```bash
 aica index-code [--path PATH]
@@ -209,18 +171,23 @@ aica index-code [--path PATH]
 
 **Options:**
 
-| Option   | Type   | Default              | Description              |
-| -------- | ------ | -------------------- | ------------------------ |
-| `--path` | `Path` | `AICA_WORKSPACE_DIR` | Python codebase to index |
+| Option   | Type   | Default              | Description                               |
+| -------- | ------ | -------------------- | ----------------------------------------- |
+| `--path` | `Path` | `AICA_WORKSPACE_DIR` | TypeScript/TSX repository root to analyse |
 
-**Output:** `.aica/index.json` containing:
+**Output files written to `<path>/.repo_intelligence/ast/`:**
 
-- File list
-- Line counts
-- Classes (name, methods, line numbers)
-- Functions (name, line number)
+| File              | Contents                                                |
+| ----------------- | ------------------------------------------------------- |
+| `imports.json`    | All import statements (kind, named, default, type-only) |
+| `functions.json`  | Functions, arrows, methods (async, exported, params)    |
+| `exports.json`    | Named, default, re-export, namespace-reexport forms     |
+| `call_graph.json` | Per-file call graph (caller → callees, new expressions) |
+| `hooks.json`      | React hook invocations (use\* pattern)                  |
+| `components.json` | React component definitions with inferred props         |
+| `types.json`      | TypeScript interface and type alias declarations        |
 
-**Summary table columns:** files count, total lines, classes count, functions count.
+**Summary table columns:** functions, exported functions, imports (external/alias/relative), call relations, new expressions, exports (named/default/re-exports), hooks, components, types.
 
 **Examples:**
 
@@ -228,8 +195,8 @@ aica index-code [--path PATH]
 # Index the current workspace
 aica index-code
 
-# Index a specific Python project
-aica index-code --path /projects/my-python-lib
+# Index a specific TypeScript/Next.js repository
+aica index-code --path /projects/my-nextjs-app
 ```
 
 ---

@@ -17,15 +17,15 @@ AICA is a local, CLI-first AI coding automation engine. It orchestrates AI agent
 
 ## Overview
 
-| Capability            | Description                                                                                                                                                                                                                      |
-| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Repo Intelligence** | Deep-scan Next.js / Python repos — 17 detectors covering routes, components, services, database, packages, Zustand stores, tRPC routers, i18n, auth providers, server modules, LLM providers, env vars, hooks, scripts, and libs |
-| **LLM Integration**   | Pluggable provider facade (Ollama & OpenRouter) with retry, streaming, and async APIs                                                                                                                                            |
-| **Task Planning**     | Structured multi-step execution plans for coding tasks                                                                                                                                                                           |
-| **Code Execution**    | Safe subprocess wrapper with captured output and timeout support                                                                                                                                                                 |
-| **Extensible Agents** | `BaseAgent` ABC dispatched by an `Orchestrator` registry                                                                                                                                                                         |
-| **Pluggable Memory**  | Swappable `MemoryStore` backends (in-memory by default)                                                                                                                                                                          |
-| **Rich CLI**          | 8 commands with beautiful `rich` tables and panels                                                                                                                                                                               |
+| Capability            | Description                                                                                                                                                                                                                                                        |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Repo Intelligence** | Deep-scan Next.js repos — 17 detectors covering routes, components, services, database, packages, Zustand stores, tRPC routers, i18n, auth providers, server modules, LLM providers, env vars, hooks, scripts, and libs; 7 TypeScript AST extractors (tree-sitter) |
+| **LLM Integration**   | Pluggable provider facade (Ollama & OpenRouter) with retry, streaming, and async APIs                                                                                                                                                                              |
+| **Task Planning**     | Structured multi-step execution plans for coding tasks                                                                                                                                                                                                             |
+| **Code Execution**    | Safe subprocess wrapper with captured output and timeout support                                                                                                                                                                                                   |
+| **Extensible Agents** | `BaseAgent` ABC dispatched by an `Orchestrator` registry                                                                                                                                                                                                           |
+| **Pluggable Memory**  | Swappable `MemoryStore` backends (in-memory by default)                                                                                                                                                                                                            |
+| **Rich CLI**          | 8 commands with beautiful `rich` tables and panels                                                                                                                                                                                                                 |
 
 ---
 
@@ -34,8 +34,8 @@ AICA is a local, CLI-first AI coding automation engine. It orchestrates AI agent
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                          CLI (Typer)                            │
-│  status · version · scan-repo · scan-next · summarize-repo      │
-│  index-code · plan-task · run-task                              │
+│  status · version · scan-repo [––verbose] · index-code      │
+│  summarize-repo · plan-task · run-task                        │
 └────────────────────────────┬────────────────────────────────────┘
                              │
           ┌──────────────────┼──────────────────┐
@@ -61,7 +61,7 @@ AICA is a local, CLI-first AI coding automation engine. It orchestrates AI agent
     └────────────┘   └──────────────┘
 ```
 
-**Data flow for `aica scan-next`:**
+**Data flow for `aica scan-repo`:**
 
 ```
 CLI → RepositoryScanner.scan(path)
@@ -84,10 +84,26 @@ CLI → RepositoryScanner.scan(path)
         └── LibsDetector           → integration libraries
             │
             ▼
-      OutputWriter → .repo_intelligence/*.json  (15 files + repo_summary.json)
+      OutputWriter → .repo_intelligence/*.json  (16 files + repo_summary.json)
             │
             ▼
     RepoSummaryGenerator → repo_summary.json
+```
+
+**Data flow for `aica index-code`:**
+
+```
+CLI → ASTExtractorRunner.run(path)
+        ├── extract_imports    → imports list
+        ├── extract_functions  → functions list
+        ├── extract_exports    → exports list
+        ├── extract_calls      → calls list  → build_call_graph()
+        ├── extract_hooks      → hooks list
+        ├── extract_components → components list
+        └── extract_types      → types list
+            │
+            ▼
+    ASTWriter → .repo_intelligence/ast/*.json  (7 files)
 ```
 
 ---

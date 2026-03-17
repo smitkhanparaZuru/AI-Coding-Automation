@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import json
 from pathlib import Path
@@ -328,7 +328,7 @@ def test_scan_repository_database_empty_for_no_orm(empty_repo: Path) -> None:
 
 
 def test_cli_scan_next_writes_database_json(prisma_repo: Path) -> None:
-    result = runner.invoke(app, ["scan-next", "--path", str(prisma_repo)])
+    result = runner.invoke(app, ["scan-repo", "--path", str(prisma_repo)])
     assert result.exit_code == 0, result.output
     db_file = prisma_repo / ".repo_intelligence" / "database.json"
     assert db_file.exists(), "database.json not written"
@@ -338,7 +338,7 @@ def test_cli_scan_next_writes_database_json(prisma_repo: Path) -> None:
 
 
 def test_cli_scan_next_writes_empty_database_json(empty_repo: Path) -> None:
-    result = runner.invoke(app, ["scan-next", "--path", str(empty_repo)])
+    result = runner.invoke(app, ["scan-repo", "--path", str(empty_repo)])
     assert result.exit_code == 0, result.output
     db_file = empty_repo / ".repo_intelligence" / "database.json"
     assert db_file.exists(), "database.json not written"

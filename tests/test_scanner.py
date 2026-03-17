@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import json
 from pathlib import Path
@@ -224,22 +224,22 @@ def test_output_writer_overwrites_existing(tmp_path: Path) -> None:
 
 
 def test_cli_scan_next_exits_zero(nextjs_repo: Path) -> None:
-    result = runner.invoke(app, ["scan-next", "--path", str(nextjs_repo)])
+    result = runner.invoke(app, ["scan-repo", "--path", str(nextjs_repo)])
     assert result.exit_code == 0
 
 
 def test_cli_scan_next_shows_framework(nextjs_repo: Path) -> None:
-    result = runner.invoke(app, ["scan-next", "--path", str(nextjs_repo)])
+    result = runner.invoke(app, ["scan-repo", "--path", str(nextjs_repo), "--verbose"])
     assert "Next.js" in result.output
 
 
 def test_cli_scan_next_shows_language(nextjs_repo: Path) -> None:
-    result = runner.invoke(app, ["scan-next", "--path", str(nextjs_repo)])
+    result = runner.invoke(app, ["scan-repo", "--path", str(nextjs_repo), "--verbose"])
     assert "TypeScript" in result.output
 
 
 def test_cli_scan_next_writes_output_file(nextjs_repo: Path) -> None:
-    runner.invoke(app, ["scan-next", "--path", str(nextjs_repo)])
+    runner.invoke(app, ["scan-repo", "--path", str(nextjs_repo)])
     out_file = nextjs_repo / ".repo_intelligence" / "structure.json"
     assert out_file.exists()
     data = json.loads(out_file.read_text(encoding="utf-8"))
@@ -248,7 +248,7 @@ def test_cli_scan_next_writes_output_file(nextjs_repo: Path) -> None:
 
 def test_cli_scan_next_nonexistent_path(tmp_path: Path) -> None:
     bad_path = tmp_path / "does_not_exist"
-    result = runner.invoke(app, ["scan-next", "--path", str(bad_path)])
+    result = runner.invoke(app, ["scan-repo", "--path", str(bad_path)])
     assert result.exit_code != 0
 
 
@@ -386,7 +386,7 @@ def test_route_detector_empty_app_dir(tmp_path: Path) -> None:
 
 
 def test_scanner_routes_json_written(routes_repo: Path) -> None:
-    runner.invoke(app, ["scan-next", "--path", str(routes_repo)])
+    runner.invoke(app, ["scan-repo", "--path", str(routes_repo)])
     routes_file = routes_repo / ".repo_intelligence" / "routes.json"
 
     assert routes_file.exists()
@@ -396,7 +396,7 @@ def test_scanner_routes_json_written(routes_repo: Path) -> None:
 
 
 def test_scan_next_cli_routes_table(routes_repo: Path) -> None:
-    result = runner.invoke(app, ["scan-next", "--path", str(routes_repo)])
+    result = runner.invoke(app, ["scan-repo", "--path", str(routes_repo), "--verbose"])
 
     assert result.exit_code == 0
     assert "/dashboard" in result.output
@@ -578,7 +578,7 @@ def test_cli_scan_next_writes_services_json(nextjs_repo: Path) -> None:
         encoding="utf-8",
     )
 
-    runner.invoke(app, ["scan-next", "--path", str(nextjs_repo)])
+    runner.invoke(app, ["scan-repo", "--path", str(nextjs_repo)])
 
     svc_file = nextjs_repo / ".repo_intelligence" / "services.json"
     assert svc_file.exists()
@@ -596,7 +596,7 @@ def test_cli_scan_next_services_table_shown(nextjs_repo: Path) -> None:
         encoding="utf-8",
     )
 
-    result = runner.invoke(app, ["scan-next", "--path", str(nextjs_repo)])
+    result = runner.invoke(app, ["scan-repo", "--path", str(nextjs_repo), "--verbose"])
 
     assert result.exit_code == 0
     assert "AuthService" in result.output
@@ -604,7 +604,7 @@ def test_cli_scan_next_services_table_shown(nextjs_repo: Path) -> None:
 
 def test_cli_scan_next_services_json_empty_when_no_services(nextjs_repo: Path) -> None:
     """services.json should be written (as empty list) even when no services exist."""
-    runner.invoke(app, ["scan-next", "--path", str(nextjs_repo)])
+    runner.invoke(app, ["scan-repo", "--path", str(nextjs_repo)])
 
     svc_file = nextjs_repo / ".repo_intelligence" / "services.json"
     assert svc_file.exists()

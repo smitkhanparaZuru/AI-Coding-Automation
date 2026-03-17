@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import json
 from pathlib import Path
@@ -307,7 +307,7 @@ def test_scan_repository_packages_key_present_on_empty(empty_repo: Path) -> None
 
 
 def test_scan_next_writes_packages_json(nextjs_pkg_repo: Path) -> None:
-    result = runner.invoke(app, ["scan-next", "--path", str(nextjs_pkg_repo)])
+    result = runner.invoke(app, ["scan-repo", "--path", str(nextjs_pkg_repo)])
     assert result.exit_code == 0, result.output
     pkg_file = nextjs_pkg_repo / ".repo_intelligence" / "packages.json"
     assert pkg_file.exists(), "packages.json was not created"
@@ -320,7 +320,7 @@ def test_scan_next_writes_packages_json(nextjs_pkg_repo: Path) -> None:
 
 
 def test_scan_next_packages_json_schema(nextjs_pkg_repo: Path) -> None:
-    runner.invoke(app, ["scan-next", "--path", str(nextjs_pkg_repo)])
+    runner.invoke(app, ["scan-repo", "--path", str(nextjs_pkg_repo)])
     pkg_file = nextjs_pkg_repo / ".repo_intelligence" / "packages.json"
     data = json.loads(pkg_file.read_text(encoding="utf-8"))
     for key in ("framework", "ui", "database", "auth", "state"):

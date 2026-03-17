@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import json
 from pathlib import Path
@@ -204,7 +204,7 @@ def test_output_writer_saves_components_list(tmp_path: Path) -> None:
 
 
 def test_cli_scan_next_writes_components_json(nextjs_repo: Path) -> None:
-    result = runner.invoke(app, ["scan-next", "--path", str(nextjs_repo)])
+    result = runner.invoke(app, ["scan-repo", "--path", str(nextjs_repo)])
     assert result.exit_code == 0
     out_file = nextjs_repo / ".repo_intelligence" / "components.json"
     assert out_file.exists()
@@ -215,13 +215,13 @@ def test_cli_scan_next_writes_components_json(nextjs_repo: Path) -> None:
 
 
 def test_cli_scan_next_shows_components_panel(nextjs_repo: Path) -> None:
-    result = runner.invoke(app, ["scan-next", "--path", str(nextjs_repo)])
+    result = runner.invoke(app, ["scan-repo", "--path", str(nextjs_repo), "--verbose"])
     assert result.exit_code == 0
     assert "Hero" in result.output
 
 
 def test_cli_scan_next_components_have_props_key(nextjs_repo: Path) -> None:
-    runner.invoke(app, ["scan-next", "--path", str(nextjs_repo)])
+    runner.invoke(app, ["scan-repo", "--path", str(nextjs_repo)])
     out_file = nextjs_repo / ".repo_intelligence" / "components.json"
     data = json.loads(out_file.read_text(encoding="utf-8"))
     for component in data:

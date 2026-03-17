@@ -8,11 +8,11 @@ A local, CLI-first AI coding automation engine built on Python 3.11+. AICA orche
 - **Pluggable provider facade** — `LLMProvider` factory with sync, async, streaming, and async-streaming APIs; exponential-backoff retries on transient errors
 - **Modular agent architecture** — composable `BaseAgent` ABC dispatched by an `Orchestrator` registry
 - **Task planner** — `TaskPlanner` generates structured multi-step execution plans (LLM-driven in Phase 2)
-- **Repo intelligence** — `RepoAnalyzer` inspects workspace metadata; `CodeIndexer` parses Python source and emits a `.aica/index.json` summary
+- **Repo intelligence** — 17 detectors deep-scan Next.js repos (routes, stores, tRPC, i18n, auth, env vars, and more); 7 TypeScript AST extractors (functions, imports, exports, calls, hooks, components, types) via tree-sitter
 - **Execution runner** — safe subprocess wrapper (`ExecutionRunner`) with captured stdout/stderr and a `RunResult` return type
 - **Pluggable memory** — `MemoryStore` ABC with an in-memory implementation; swap for a persistent backend without touching agent code
 - **Extensible tool system** — grow automation capabilities by subclassing `BaseTool`
-- **Rich CLI** — eight commands with beautiful `rich` panels via `typer`
+- **Rich CLI** — seven commands with beautiful `rich` panels via `typer`
 - **Layered config** — env vars → `.env` file → defaults via Pydantic Settings v2; secrets masked in logs
 
 ## Requirements
@@ -95,16 +95,16 @@ AICA_OPENROUTER_MODEL=openai/gpt-4o-mini
 aica --help
 ```
 
-| Command          | Description                                                                   |
-| ---------------- | ----------------------------------------------------------------------------- |
-| `status`         | Display current configuration and loaded modules                              |
-| `version`        | Print the installed AICA version                                              |
-| `scan-repo`      | Deep-scan a repo, write all 15 intelligence JSON files, and display a summary |
-| `index-code`     | Index Python source files and save `.aica/index.json`                         |
-| `scan-next`      | Verbose deep-scan of a Next.js App Router repo with per-entity rich tables    |
-| `summarize-repo` | Regenerate `repo_summary.json` from existing `.repo_intelligence/` artifacts  |
-| `plan-task`      | Generate a structured multi-step execution plan for a task                    |
-| `run-task`       | Execute a shell command and display captured stdout / stderr                  |
+| Command               | Description                                                                   |
+| --------------------- | ----------------------------------------------------------------------------- |
+| `status`              | Display current configuration and loaded modules                              |
+| `version`             | Print the installed AICA version                                              |
+| `scan-repo`           | Deep-scan a repo, write all 16 intelligence JSON files, and display a summary |
+| `scan-repo --verbose` | Same scan, plus per-entity rich tables (routes, stores, auth, tRPC, etc.)     |
+| `index-code`          | Run TypeScript/TSX AST analysis and write to `.repo_intelligence/ast/`        |
+| `summarize-repo`      | Regenerate `repo_summary.json` from existing `.repo_intelligence/` artifacts  |
+| `plan-task`           | Generate a structured multi-step execution plan for a task                    |
+| `run-task`            | Execute a shell command and display captured stdout / stderr                  |
 
 ### Examples
 
@@ -115,14 +115,14 @@ aica status
 # Scan a repository and write all .repo_intelligence/ files
 aica scan-repo --path /path/to/repo
 
-# Verbose Next.js scan with per-entity rich tables
-aica scan-next --path /path/to/nextjs-repo
+# Verbose scan with per-entity rich tables (routes, components, stores, tRPC, etc.)
+aica scan-repo --path /path/to/nextjs-repo --verbose
 
 # Regenerate repo_summary.json from existing artifacts (no re-scan)
 aica summarize-repo --path /path/to/repo
 
-# Index Python source files in the current workspace
-aica index-code
+# Run TypeScript/TSX AST analysis on all source files
+aica index-code --path /path/to/repo
 
 # Generate an execution plan
 aica plan-task "Refactor the authentication module to use JWT"
@@ -150,10 +150,20 @@ aica/
 │       ├── openrouter.py  # OpenRouterProvider (with retry logic)
 │       └── exceptions.py  # LLMError hierarchy
 ├── repo_intelligence/
-│   ├── analyzer.py        # RepoAnalyzer — workspace metadata
-│   ├── indexer.py         # CodeIndexer — Python AST → index.json
+│   ├── ast/
+│   │   ├── parser.py      # tree-sitter TypeScript/TSX parser (cached Language instances)
+│   │   ├── runner.py      # ASTExtractorRunner — walks .ts/.tsx files, runs all 7 extractors
+│   │   ├── writer.py      # ASTWriter — writes JSON to .repo_intelligence/ast/
+│   │   └── extractors/
+│   │       ├── imports.py     # extract_imports   → per-file import statements
+│   │       ├── functions.py   # extract_functions → functions, arrows, methods
+│   │       ├── exports.py     # extract_exports   → named/default/re-export forms
+│   │       ├── calls.py       # extract_calls + build_call_graph()
+│   │       ├── hooks.py       # extract_hooks     → React use* call sites
+│   │       ├── components.py  # extract_components → React component definitions
+│   │       └── types.py       # extract_types     → interface and type alias decls
 │   └── scanner/
-│       ├── core.py        # RepositoryScanner — orchestrates all detectors
+│       ├── core.py        # RepositoryScanner — orchestrates all 17 detectors
 │       ├── summarizer.py  # RepoSummaryGenerator — repo_summary.json
 │       ├── writers.py     # OutputWriter — serialize dicts to .repo_intelligence/
 │       └── detectors/
@@ -183,7 +193,7 @@ aica/
 │   └── terminal/
 │       └── runner.py      # TerminalRunner — timeout + cwd management
 ├── interfaces/
-│   └── cli.py             # Typer CLI (8 commands)
+│   └── cli.py             # Typer CLI (7 commands)
 tests/                     # pytest suite
 ```
 

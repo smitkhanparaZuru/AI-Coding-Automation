@@ -340,25 +340,37 @@ class BaseTool(ABC):
 ```python
 class RepositoryScanner:
     def __init__(self) -> None:
-        """Initialise with all 7 detectors."""
+        """Initialise with all 17 detectors."""
 
     def scan(self, repo_path: Path) -> dict:
         """Run all detectors against `repo_path` and return merged results.
 
         Returns dict containing:
-            'repo_path'     (str)    — absolute repo path
-            'framework'     (str)    — detected framework
-            'language'      (str)    — primary language
-            'app_router'    (bool)   — Next.js App Router detected
-            'next_version'  (str)    — Next.js version string
-            'package_manager' (str)  — npm|pnpm|yarn|bun
-            'src_structure' (dict)   — directory map
-            'config_files'  (list)   — config file paths
-            'routes'        (list)   — route dicts
-            'components'    (list)   — component dicts
-            'services'      (list)   — service dicts
-            'database'      (list)   — database dicts
-            'packages'      (dict)   — categorised packages
+            'repo_path'        (str)   — absolute repo path
+            'framework'        (str)   — detected framework
+            'language'         (str)   — primary language
+            'app_router'       (bool)  — Next.js App Router detected
+            'next_version'     (str)   — Next.js version string
+            'package_manager'  (str)   — npm|pnpm|yarn|bun
+            'src_structure'    (dict)  — directory map {name: rel_path}
+            'config_files'     (dict)  — {key: filename}
+            'root_dirs'        (list)  — top-level directory names
+            'has_src_prefix'   (bool)  — src/ prefix present
+            'routes'           (list)  — route dicts
+            'components'       (list)  — component dicts
+            'services'         (list)  — service dicts
+            'database'         (list)  — database dicts
+            'packages'         (dict)  — categorised packages
+            'stores'           (list)  — Zustand store dicts
+            'trpc_routers'     (list)  — tRPC router dicts
+            'i18n'             (dict)  — i18n configuration
+            'auth'             (dict)  — auth configuration
+            'server_modules'   (list)  — server module dicts
+            'agent_runtime'    (dict)  — LLM and SSO providers
+            'env_vars'         (dict)  — env var categories
+            'hooks'            (list)  — custom hook dicts
+            'scripts'          (list)  — automation script dicts
+            'libs'             (list)  — library dicts
         """
 ```
 
@@ -380,20 +392,35 @@ class RepoSummaryGenerator:
     def generate(self, repo_path: Path) -> dict:
         """Read existing .repo_intelligence/*.json files and write repo_summary.json.
 
-        Returns summary dict:
-            'framework'         (str)       — framework name
-            'language'          (str)       — primary language
-            'routes_count'      (int)       — number of routes
-            'components_count'  (int)       — number of components
-            'services_count'    (int)       — number of services
-            'database'          (str|None)  — ORM name or None
+        Returns summary dict (same schema as from_scan_data).
         """
 
     @classmethod
     def from_scan_data(cls, scan_data: dict) -> dict:
         """Derive summary directly from in-memory scan result dict.
         No disk I/O — caller is responsible for persisting via OutputWriter.
-        Returns same summary structure as generate().
+
+        Returns:
+            'framework'             (str)       — framework name
+            'language'              (str)       — primary language
+            'routes_count'          (int)       — number of routes
+            'components_count'      (int)       — number of components
+            'services_count'        (int)       — number of services
+            'database'              (str|None)  — ORM name or None
+            'db_models_count'       (int)       — number of DB models
+            'stores_count'          (int)       — number of Zustand store modules
+            'trpc_routers_count'    (int)       — number of tRPC router files
+            'trpc_procedures_count' (int)       — total tRPC procedures
+            'i18n_source_lang'      (str|None)  — source locale code
+            'i18n_namespace_count'  (int)       — number of i18n namespaces
+            'auth_providers'        (list[str]) — detected auth provider names
+            'server_modules_count'  (int)       — number of server modules
+            'ai_providers_count'    (int)       — number of LLM providers
+            'sso_providers_count'   (int)       — number of SSO providers
+            'hooks_count'           (int)       — number of custom React hooks
+            'scripts_count'         (int)       — number of automation scripts
+            'env_vars_total'        (int)       — total environment variables
+            'libs_count'            (int)       — number of integration libraries
         """
 ```
 
@@ -405,40 +432,185 @@ class RepoSummaryGenerator:
 
 ```python
 class OutputWriter:
-    def write(self, repo_path: Path, scan_data: dict) -> None:
-        """Serialize scan_data to .repo_intelligence/*.json files.
+    def write(self, data: dict | list, repo_path: Path, filename: str) -> Path:
+        """Write JSON-serialized data to <repo_path>/.repo_intelligence/<filename>.
 
-        Writes:
-            .repo_intelligence/structure.json
-            .repo_intelligence/routes.json
-            .repo_intelligence/components.json
-            .repo_intelligence/services.json
-            .repo_intelligence/database.json
-            .repo_intelligence/packages.json
-        Creates the directory if it doesn't exist.
+        Creates .repo_intelligence/ directory if it does not exist.
+        Logs the output path and byte size.
+
+        Returns:
+            Path to the written file.
         """
 ```
 
 ---
 
-## `aica.repo_intelligence.indexer`
+## `aica.repo_intelligence.ast`
 
-### `CodeIndexer`
+Tree-sitter based TypeScript/TSX AST extraction pipeline.
+
+### `parse_file` / `parse_code`
 
 ```python
-class CodeIndexer:
-    def index(self, workspace_path: Path) -> dict:
-        """Parse Python source files under workspace_path using AST.
+from aica.repo_intelligence.ast.parser import parse_file, parse_code
 
-        Returns index dict:
-            'files'     (list[str])  — relative file paths
-            'lines'     (int)        — total line count
-            'classes'   (list[dict]) — {name, file, methods, line}
-            'functions' (list[dict]) — {name, file, line}
+def parse_file(file_path: str | Path) -> Tree:
+    """Read and parse a .ts or .tsx file. Grammar is auto-selected from extension.
+    Raises FileNotFoundError if the file does not exist.
+    """
 
-        Writes result to <workspace_path>/.aica/index.json.
+def parse_code(code: str, lang: str = "typescript") -> Tree:
+    """Parse a source string. lang must be 'typescript' or 'tsx'."""
+```
+
+### `ASTExtractorRunner`
+
+```python
+from aica.repo_intelligence.ast.runner import ASTExtractorRunner
+
+class ASTExtractorRunner:
+    def run(self, repo_path: Path) -> dict:
+        """Walk all .ts/.tsx files under repo_path and run all 7 extractors.
+
+        Excluded directories: node_modules, .next, dist, build, out, .git,
+        .aica, .repo_intelligence.
+
+        Returns dict with keys (all values are lists of dicts):
+            'imports'    — import statements
+            'functions'  — function declarations
+            'exports'    — export statements
+            'calls'      — call expressions (flat list)
+            'hooks'      — React hook invocations
+            'components' — React component definitions
+            'types'      — TypeScript interfaces and type aliases
         """
 ```
+
+### `ASTWriter`
+
+```python
+from aica.repo_intelligence.ast.writer import ASTWriter
+
+class ASTWriter:
+    def write(self, data: list, repo_path: Path, filename: str) -> Path:
+        """Write JSON-serialized extractor results to
+        <repo_path>/.repo_intelligence/ast/<filename>.
+        Creates directory if needed. Returns written Path.
+        """
+```
+
+### Extractor functions
+
+All extractors follow the contract: `extract(tree: Tree, source: str, file_path: str) -> list[dict]`.
+
+```python
+from aica.repo_intelligence.ast.extractors import (
+    extract_imports,
+    extract_functions,
+    extract_exports,
+    extract_calls,
+    extract_hooks,
+    extract_components,
+    extract_types,
+    build_call_graph,
+)
+```
+
+**`extract_imports`** — output schema per entry:
+
+| Field         | Type         | Description                               |
+| ------------- | ------------ | ----------------------------------------- |
+| `file`        | `str`        | POSIX-relative path                       |
+| `source`      | `str`        | module specifier                          |
+| `import_kind` | `str`        | `"relative"` \| `"alias"` \| `"external"` |
+| `default`     | `str\|None`  | default binding name                      |
+| `named`       | `list[dict]` | `[{"name": str, "alias": str\|None}]`     |
+| `namespace`   | `str\|None`  | `* as X` binding                          |
+| `type_only`   | `bool`       | `import type { ... }`                     |
+| `side_effect` | `bool`       | `import './styles.css'`                   |
+| `line`        | `int`        | 1-based line number                       |
+
+**`extract_functions`** — output schema per entry:
+
+| Field      | Type        | Description                                              |
+| ---------- | ----------- | -------------------------------------------------------- |
+| `file`     | `str`       | POSIX-relative path                                      |
+| `name`     | `str\|None` | `None` for anonymous arrows                              |
+| `kind`     | `str`       | `"function"` \| `"arrow"` \| `"method"` \| `"generator"` |
+| `async`    | `bool`      |                                                          |
+| `params`   | `list[str]` | parameter names (type annotations stripped)              |
+| `line`     | `int`       | 1-based line number                                      |
+| `exported` | `bool`      | directly wrapped in `export_statement`                   |
+
+**`extract_exports`** — output schema per entry:
+
+| Field        | Type        | Description                                                         |
+| ------------ | ----------- | ------------------------------------------------------------------- |
+| `file`       | `str`       | POSIX-relative path                                                 |
+| `name`       | `str\|None` | public binding; `"default"` for default exports                     |
+| `local_name` | `str\|None` | original local symbol                                               |
+| `kind`       | `str`       | `"named"` \| `"default"` \| `"re-export"` \| `"namespace-reexport"` |
+| `type_only`  | `bool`      | `export type { ... }`                                               |
+| `source`     | `str\|None` | from-clause specifier for re-exports                                |
+| `line`       | `int`       | 1-based line number                                                 |
+
+**`extract_calls`** — output schema per entry:
+
+| Field           | Type        | Description                                     |
+| --------------- | ----------- | ----------------------------------------------- |
+| `file`          | `str`       | POSIX-relative path                             |
+| `caller`        | `str\|None` | enclosing named function; `None` = module-level |
+| `callee`        | `str`       | called function name                            |
+| `callee_object` | `str\|None` | receiver for method calls                       |
+| `kind`          | `str`       | `"call"` \| `"new"`                             |
+| `line`          | `int`       | 1-based line number                             |
+
+**`build_call_graph(calls: list[dict]) -> list[dict]`** — group flat call rows by file then by caller:
+
+```python
+# Input: flat list from extract_calls
+# Output:
+[
+  {
+    "file": "src/foo.ts",
+    "functions": [
+      {"name": "myFn" | None, "calls": [...]}
+    ]
+  }
+]
+```
+
+**`extract_hooks`** — output schema per entry:
+
+| Field        | Type        | Description                 |
+| ------------ | ----------- | --------------------------- |
+| `file`       | `str`       | POSIX-relative path         |
+| `name`       | `str`       | hook name (e.g. `useState`) |
+| `caller`     | `str\|None` | enclosing named function    |
+| `args_count` | `int`       | number of call arguments    |
+| `line`       | `int`       | 1-based line number         |
+
+**`extract_components`** — output schema per entry:
+
+| Field      | Type        | Description                              |
+| ---------- | ----------- | ---------------------------------------- |
+| `file`     | `str`       | POSIX-relative path                      |
+| `name`     | `str`       | component name (PascalCase)              |
+| `kind`     | `str`       | `"function"` \| `"arrow"` \| `"class"`   |
+| `props`    | `list[str]` | destructured prop names from first param |
+| `exported` | `bool`      | directly wrapped in `export_statement`   |
+| `line`     | `int`       | 1-based line number                      |
+
+**`extract_types`** — output schema per entry:
+
+| Field      | Type        | Description                                       |
+| ---------- | ----------- | ------------------------------------------------- |
+| `file`     | `str`       | POSIX-relative path                               |
+| `name`     | `str`       | interface or type alias name                      |
+| `kind`     | `str`       | `"interface"` \| `"type"`                         |
+| `exported` | `bool`      | immediate parent is `export_statement`            |
+| `members`  | `list[str]` | property/method names (`[]` for non-object types) |
+| `line`     | `int`       | 1-based line number                               |
 
 ---
 
