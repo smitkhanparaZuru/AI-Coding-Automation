@@ -78,6 +78,73 @@ _STATE_CATALOG: list[str] = [
     "xstate",
 ]
 
+_ANALYTICS_CATALOG: list[str] = [
+    "@sentry/nextjs",
+    "posthog-js",
+    "@vercel/analytics",
+    "@vercel/speed-insights",
+    "mixpanel-browser",
+    "@amplitude/analytics-browser",
+]
+
+_AI_SDK_CATALOG: list[str] = [
+    "ai",
+    "langchain",
+    "@langchain/community",
+    "@langchain/core",
+    "langfuse",
+    "langfuse-core",
+    "@anthropic-ai/sdk",
+    "@google/generative-ai",
+    "@mistralai/mistralai",
+    "gpt-tokenizer",
+    "partial-json",
+]
+
+_SYNC_CATALOG: list[str] = [
+    "yjs",
+    "y-protocols",
+    "y-webrtc",
+    "y-indexeddb",
+    "y-websocket",
+]
+
+_FILE_PARSING_CATALOG: list[str] = [
+    "pdf-parse",
+    "pdfjs-dist",
+    "mammoth",
+    "officeparser",
+    "sharp",
+    "unstructured-client",
+]
+
+_MONITORING_CATALOG: list[str] = [
+    "@sentry/nextjs",
+    "posthog-js",
+    "posthog-node",
+    "@vercel/analytics",
+    "@vercel/speed-insights",
+    "pino",
+    "langfuse",
+    "langfuse-core",
+]
+
+_PAYMENT_CATALOG: list[str] = [
+    "stripe",
+    "svix",
+    "@paddle/paddle-node-sdk",
+]
+
+_REALTIME_CATALOG: list[str] = [
+    "ioredis",
+    "@vercel/edge-config",
+    "@vercel/kv",
+    "@upstash/redis",
+    "pusher",
+    "pusher-js",
+    "socket.io",
+]
+
 
 def _match_catalog(installed: set[str], catalog: list[str]) -> list[str]:
     """Return canonical catalog labels that matched any installed package name.
@@ -149,6 +216,16 @@ class PackageDetector:
         database = _match_catalog(installed, _DATABASE_CATALOG)
         auth = _match_catalog(installed, _AUTH_CATALOG)
         state = _match_catalog(installed, _STATE_CATALOG)
+        analytics = _match_catalog(installed, _ANALYTICS_CATALOG)
+        ai_sdk = _match_catalog(installed, _AI_SDK_CATALOG)
+        sync = _match_catalog(installed, _SYNC_CATALOG)
+        file_parsing = _match_catalog(installed, _FILE_PARSING_CATALOG)
+        monitoring = _match_catalog(installed, _MONITORING_CATALOG)
+        payment = _match_catalog(installed, _PAYMENT_CATALOG)
+        realtime = _match_catalog(installed, _REALTIME_CATALOG)
+        ai_providers = self._detect_ai_providers(repo_path)
+        branding = self._detect_branding(repo_path)
+        feature_flags = self._detect_feature_flags(repo_path)
 
         result = {
             "framework": framework,
@@ -156,6 +233,16 @@ class PackageDetector:
             "database": database,
             "auth": auth,
             "state": state,
+            "analytics": analytics,
+            "ai_sdk": ai_sdk,
+            "sync": sync,
+            "file_parsing": file_parsing,
+            "monitoring": monitoring,
+            "payment": payment,
+            "realtime": realtime,
+            "ai_providers": ai_providers,
+            "branding": branding,
+            "feature_flags": feature_flags,
         }
         log.info(
             "packages.done",
@@ -164,6 +251,7 @@ class PackageDetector:
             database=database,
             auth=auth,
             state=state,
+            ai_providers=len(ai_providers),
         )
         return result
 
@@ -193,3 +281,49 @@ class PackageDetector:
             elif entry in installed:
                 return entry
         return None
+
+    def _detect_ai_providers(self, repo_path: Path) -> list[str]:
+        """List AI model provider config folders under src/config/modelProviders/."""
+        for candidate in ("src/config/modelProviders", "config/modelProviders"):
+            d = repo_path / candidate
+            if d.is_dir():
+                return sorted(
+                    entry.stem if entry.is_file() else entry.name
+                    for entry in d.iterdir()
+                    if not entry.name.startswith("_")
+                )
+        return []
+
+    def _detect_branding(self, repo_path: Path) -> dict | None:
+        """Extract branding constant names from branding config files."""
+        import re
+
+        for candidate in (
+            "src/config/branding.ts",
+            "src/const/branding.ts",
+            "src/branding.ts",
+        ):
+            branding_path = repo_path / candidate
+            if not branding_path.exists():
+                continue
+            try:
+                content = branding_path.read_text(encoding="utf-8", errors="ignore")
+            except OSError:
+                continue
+            # Extract exported const names
+            exports = re.findall(
+                r"export\s+(?:const|let)\s+([A-Z_][A-Z0-9_]*)\s*=", content
+            )
+            return {"file": candidate, "constants": sorted(set(exports))}
+        return None
+
+    def _detect_feature_flags(self, repo_path: Path) -> bool:
+        """Return True if a feature-flags config directory or file exists."""
+        for candidate in (
+            "src/config/featureFlags",
+            "src/feature-flags",
+            "src/flags",
+        ):
+            if (repo_path / candidate).exists():
+                return True
+        return False

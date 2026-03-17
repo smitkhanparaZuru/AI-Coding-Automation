@@ -50,6 +50,16 @@ class RepoSummaryGenerator:
         services = self._load_list(artifact_dir / "services.json")
         database = self._load_list(artifact_dir / "database.json")
         structure = self._load_dict(artifact_dir / "structure.json")
+        stores = self._load_list(artifact_dir / "stores.json")
+        trpc_routers = self._load_list(artifact_dir / "trpc_routers.json")
+        i18n = self._load_dict(artifact_dir / "i18n.json")
+        auth = self._load_dict(artifact_dir / "auth.json")
+        server_modules = self._load_list(artifact_dir / "server_modules.json")
+        agent_runtime = self._load_dict(artifact_dir / "agent_runtime.json")
+        env_vars = self._load_dict(artifact_dir / "env_vars.json")
+        hooks = self._load_list(artifact_dir / "hooks.json")
+        scripts = self._load_list(artifact_dir / "scripts.json")
+        libs = self._load_list(artifact_dir / "libs.json")
 
         summary = self._build(
             framework=structure.get("framework", "unknown"),
@@ -58,6 +68,16 @@ class RepoSummaryGenerator:
             components=components,
             services=services,
             database=database,
+            stores=stores,
+            trpc_routers=trpc_routers,
+            i18n=i18n,
+            auth=auth,
+            server_modules=server_modules,
+            agent_runtime=agent_runtime,
+            env_vars=env_vars,
+            hooks=hooks,
+            scripts=scripts,
+            libs=libs,
         )
 
         out_path = OutputWriter().write(summary, repo_path, "repo_summary.json")
@@ -84,6 +104,16 @@ class RepoSummaryGenerator:
             components=scan_data.get("components", []),
             services=scan_data.get("services", []),
             database=scan_data.get("database", []),
+            stores=scan_data.get("stores", []),
+            trpc_routers=scan_data.get("trpc_routers", []),
+            i18n=scan_data.get("i18n", {}),
+            auth=scan_data.get("auth", {}),
+            server_modules=scan_data.get("server_modules", []),
+            agent_runtime=scan_data.get("agent_runtime", {}),
+            env_vars=scan_data.get("env_vars", {}),
+            hooks=scan_data.get("hooks", []),
+            scripts=scan_data.get("scripts", []),
+            libs=scan_data.get("libs", []),
         )
         log.info(
             "summarizer.from_scan_data.done",
@@ -91,6 +121,8 @@ class RepoSummaryGenerator:
             components=summary["components_count"],
             services=summary["services_count"],
             database=summary["database"],
+            stores=summary["stores_count"],
+            trpc_routers=summary["trpc_routers_count"],
         )
         return summary
 
@@ -107,8 +139,24 @@ class RepoSummaryGenerator:
         components: list,
         services: list,
         database: list,
+        stores: list | None = None,
+        trpc_routers: list | None = None,
+        i18n: dict | None = None,
+        auth: dict | None = None,
+        server_modules: list | None = None,
+        agent_runtime: dict | None = None,
+        env_vars: dict | None = None,
+        hooks: list | None = None,
+        scripts: list | None = None,
+        libs: list | None = None,
     ) -> dict:
         orm: str | None = database[0]["orm"] if database else None
+        i18n = i18n or {}
+        auth = auth or {}
+        agent_runtime = agent_runtime or {}
+        env_vars = env_vars or {}
+        trpc_procedures = sum(len(r.get("procedures", [])) for r in (trpc_routers or []))
+        db_models_count = len((database[0] if database else {}).get("db_models", []))
         return {
             "framework": framework,
             "language": language,
@@ -116,6 +164,20 @@ class RepoSummaryGenerator:
             "components_count": len(components),
             "services_count": len(services),
             "database": orm,
+            "stores_count": len(stores or []),
+            "trpc_routers_count": len(trpc_routers or []),
+            "trpc_procedures_count": trpc_procedures,
+            "i18n_source_lang": i18n.get("source_lang"),
+            "i18n_namespace_count": i18n.get("namespace_count", 0),
+            "auth_providers": auth.get("providers", []),
+            "server_modules_count": len(server_modules or []),
+            "ai_providers_count": len(agent_runtime.get("llm_providers", [])),
+            "sso_providers_count": len(agent_runtime.get("sso_providers", [])),
+            "hooks_count": len(hooks or []),
+            "scripts_count": len(scripts or []),
+            "env_vars_total": env_vars.get("total", 0),
+            "libs_count": len(libs or []),
+            "db_models_count": db_models_count,
         }
 
     @staticmethod

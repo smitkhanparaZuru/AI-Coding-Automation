@@ -8,7 +8,7 @@ from aica.core.logging import get_logger
 log = get_logger("repo.scanner.detectors.components")
 
 # Directories to scan for .tsx files (src/-prefixed variants are preferred)
-_SCAN_DIRS = ("components", "app")
+_SCAN_DIRS = ("components", "features", "icons", "layout", "app")
 
 # export [default] [async] function PascalName(  or  PascalName<GenericParam>(
 _RE_NAMED_EXPORT_FN = re.compile(

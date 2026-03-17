@@ -13,6 +13,22 @@ _HTTP_METHODS_ORDER = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS
 # Route group:  (groupname)  → transparent in URL
 _RE_ROUTE_GROUP = re.compile(r"^\([^)]+\)$")
 
+# tRPC / Next.js catch-all segment  [...slug] or [[...slug]]
+_RE_CATCH_ALL = re.compile(r"^\[\[?\.\.\.")
+
+# Variant dynamic segment pattern — locale-theme-mobile-... compound tuple
+_RE_VARIANTS_SEGMENT = re.compile(r"^\[variants\]$", re.IGNORECASE)
+
+# Server router tier inferred from file path
+_TIER_PATH_MAP = {
+    "/lambda/": "lambda",
+    "/async/": "async",
+    "/edge/": "edge",
+    "/webapi/": "webapi",
+    "/(backend)/api/": "api",
+    "/trpc/": "trpc",
+}
+
 # Intercepted route:  (.)segment  (..)segment  (...)segment
 # group 1 = interceptor prefix, group 2 = target segment name
 _RE_INTERCEPTED = re.compile(r"^(\(\.+\))+(.+)$")
@@ -71,6 +87,7 @@ class RouteDetector:
 
                 if final_type == "api":
                     entry["methods"] = self._extract_methods(file_path)
+                    entry["tier"] = self._infer_tier(rel_file.as_posix())
 
                 routes.append(entry)
                 log.debug("routes.found", route=route_url, type=final_type, file=str(rel_file))
@@ -114,6 +131,10 @@ class RouteDetector:
             elif _RE_ROUTE_GROUP.match(part):
                 # Route group — purely organisational, invisible in the URL
                 pass
+            elif _RE_VARIANTS_SEGMENT.match(part):
+                # Multi-tenant variants dynamic segment — tag and keep in URL
+                route_type = "variants_dynamic"
+                url_parts.append(part)
             else:
                 url_parts.append(part)
 
@@ -132,3 +153,11 @@ class RouteDetector:
         found.update(_RE_CONST_EXPORT.findall(content))
 
         return [m for m in _HTTP_METHODS_ORDER if m in found]
+
+    @staticmethod
+    def _infer_tier(rel_file_posix: str) -> str | None:
+        """Infer the API tier (lambda/async/edge) from the file path."""
+        for marker, tier in _TIER_PATH_MAP.items():
+            if marker in rel_file_posix:
+                return tier
+        return None

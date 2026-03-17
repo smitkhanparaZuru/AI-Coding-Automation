@@ -12,7 +12,7 @@ A local, CLI-first AI coding automation engine built on Python 3.11+. AICA orche
 - **Execution runner** — safe subprocess wrapper (`ExecutionRunner`) with captured stdout/stderr and a `RunResult` return type
 - **Pluggable memory** — `MemoryStore` ABC with an in-memory implementation; swap for a persistent backend without touching agent code
 - **Extensible tool system** — grow automation capabilities by subclassing `BaseTool`
-- **Rich CLI** — six commands with beautiful `rich` panels via `typer`
+- **Rich CLI** — eight commands with beautiful `rich` panels via `typer`
 - **Layered config** — env vars → `.env` file → defaults via Pydantic Settings v2; secrets masked in logs
 
 ## Requirements
@@ -95,16 +95,16 @@ AICA_OPENROUTER_MODEL=openai/gpt-4o-mini
 aica --help
 ```
 
-| Command          | Description                                                                  |
-| ---------------- | ---------------------------------------------------------------------------- |
-| `status`         | Display current configuration and loaded modules                             |
-| `version`        | Print the installed AICA version                                             |
-| `scan-repo`      | Deep-scan a repo, write all 6 intelligence JSON files, and display a summary |
-| `index-code`     | Index Python source files and save `.aica/index.json`                        |
-| `scan-next`      | Verbose deep-scan of a Next.js App Router repo with per-entity rich tables   |
-| `summarize-repo` | Regenerate `repo_summary.json` from existing `.repo_intelligence/` artifacts |
-| `plan-task`      | Generate a structured multi-step execution plan for a task                   |
-| `run-task`       | Execute a shell command and display captured stdout / stderr                 |
+| Command          | Description                                                                   |
+| ---------------- | ----------------------------------------------------------------------------- |
+| `status`         | Display current configuration and loaded modules                              |
+| `version`        | Print the installed AICA version                                              |
+| `scan-repo`      | Deep-scan a repo, write all 15 intelligence JSON files, and display a summary |
+| `index-code`     | Index Python source files and save `.aica/index.json`                         |
+| `scan-next`      | Verbose deep-scan of a Next.js App Router repo with per-entity rich tables    |
+| `summarize-repo` | Regenerate `repo_summary.json` from existing `.repo_intelligence/` artifacts  |
+| `plan-task`      | Generate a structured multi-step execution plan for a task                    |
+| `run-task`       | Execute a shell command and display captured stdout / stderr                  |
 
 ### Examples
 
@@ -157,13 +157,23 @@ aica/
 │       ├── summarizer.py  # RepoSummaryGenerator — repo_summary.json
 │       ├── writers.py     # OutputWriter — serialize dicts to .repo_intelligence/
 │       └── detectors/
-│           ├── framework.py   # FrameworkDetector
-│           ├── structure.py   # StructureDetector
-│           ├── routes.py      # RouteDetector
-│           ├── components.py  # ComponentDetector
-│           ├── services.py    # ServiceDetector
-│           ├── database.py    # DatabaseDetector
-│           └── packages.py    # PackageDetector
+            ├── framework.py       # FrameworkDetector
+            ├── structure.py       # StructureDetector
+            ├── routes.py          # RouteDetector
+            ├── components.py      # ComponentDetector
+            ├── services.py        # ServiceDetector
+            ├── database.py        # DatabaseDetector
+            ├── packages.py        # PackageDetector
+            ├── stores.py          # ZustandStoreDetector
+            ├── trpc.py            # TRPCRouterDetector
+            ├── i18n.py            # I18nDetector
+            ├── auth.py            # AuthDetector
+            ├── server_modules.py  # ServerModulesDetector
+            ├── agent_runtime.py   # AgentRuntimeDetector
+            ├── env_vars.py        # EnvVarsDetector
+            ├── hooks.py           # HooksDetector
+            ├── scripts.py         # ScriptsDetector
+            └── libs.py            # LibsDetector
 ├── memory/
 │   └── store.py           # MemoryStore ABC + InMemoryStore
 ├── tools/

@@ -58,7 +58,7 @@ aica version
 
 ### `aica scan-repo`
 
-Deep-scan a repository. Runs all 7 detectors, writes all intelligence files to `.repo_intelligence/`, and displays a summary table.
+Deep-scan a repository. Runs all 17 detectors, writes all intelligence files to `.repo_intelligence/`, and displays a summary table.
 
 ```bash
 aica scan-repo [--path PATH]
@@ -72,17 +72,27 @@ aica scan-repo [--path PATH]
 
 **Output files written to `<path>/.repo_intelligence/`:**
 
-| File                | Contents                                                    |
-| ------------------- | ----------------------------------------------------------- |
-| `structure.json`    | Full merged scan result from all detectors                  |
-| `routes.json`       | Route list (route, type, methods, file)                     |
-| `components.json`   | Component list (name, props, file)                          |
-| `services.json`     | Service list (service, exported functions, file)            |
-| `database.json`     | Database ORM list (orm, schema, models)                     |
-| `packages.json`     | Categorised packages (framework, ui, database, auth, state) |
-| `repo_summary.json` | High-level counts summary                                   |
+| File                  | Contents                                                         |
+| --------------------- | ---------------------------------------------------------------- |
+| `structure.json`      | Full merged scan result from all detectors                       |
+| `routes.json`         | Route list (route, type, methods, file)                          |
+| `components.json`     | Component list (name, props, file)                               |
+| `services.json`       | Service list (service, exported functions, file)                 |
+| `database.json`       | Database ORM list (orm, schema, models)                          |
+| `packages.json`       | Categorised packages (framework, ui, database, auth, state)      |
+| `stores.json`         | Zustand store modules (slices, middleware)                       |
+| `trpc_routers.json`   | tRPC routers per tier (lambda/async/edge) with procedures        |
+| `i18n.json`           | i18n config (source locale, target locales, namespaces)          |
+| `auth.json`           | Auth setup (providers, session strategy, middleware matchers)    |
+| `server_modules.json` | Server-side module inventory with exported symbols               |
+| `agent_runtime.json`  | LLM provider capabilities + SSO provider list                    |
+| `env_vars.json`       | Env vars categorised by type (LLM / AUTH / DATABASE / S3 / etc.) |
+| `hooks.json`          | Custom React hooks with parameter names                          |
+| `scripts.json`        | Automation scripts directory inventory                           |
+| `libs.json`           | Integration libraries / SDK catalog                              |
+| `repo_summary.json`   | High-level counts summary                                        |
 
-**Summary table columns:** routes count, components count, services count, database ORM.
+**Summary table columns:** routes, components, services, database, stores, tRPC routers, tRPC procedures, i18n namespaces, auth providers, server modules, LLM providers, env vars total, hooks, scripts, libs.
 
 **Examples:**
 
@@ -152,20 +162,34 @@ aica summarize-repo [--path PATH]
 | -------- | ------ | ----------------- | ------------------------------------------------ |
 | `--path` | `Path` | current directory | Repository root containing `.repo_intelligence/` |
 
-**Input files read:** `routes.json`, `components.json`, `services.json`, `database.json`, `structure.json`
+**Input files read:** all `.repo_intelligence/*.json` files — `structure.json`, `routes.json`, `components.json`, `services.json`, `database.json`, `packages.json`, `stores.json`, `trpc_routers.json`, `i18n.json`, `auth.json`, `server_modules.json`, `agent_runtime.json`, `env_vars.json`, `hooks.json`, `scripts.json`, `libs.json`
 
 **Output:** Writes / overwrites `<path>/.repo_intelligence/repo_summary.json`
 
 **Summary fields:**
 
-| Field              | Description             |
-| ------------------ | ----------------------- |
-| `framework`        | Detected framework name |
-| `language`         | Primary language        |
-| `routes_count`     | Number of routes        |
-| `components_count` | Number of components    |
-| `services_count`   | Number of services      |
-| `database`         | ORM name or `null`      |
+| Field                   | Description                              |
+| ----------------------- | ---------------------------------------- |
+| `framework`             | Detected framework name                  |
+| `language`              | Primary language                         |
+| `routes_count`          | Number of routes                         |
+| `components_count`      | Number of components                     |
+| `services_count`        | Number of services                       |
+| `database`              | ORM name or `null`                       |
+| `db_models_count`       | Number of database models                |
+| `stores_count`          | Number of Zustand store modules          |
+| `trpc_routers_count`    | Number of tRPC router files              |
+| `trpc_procedures_count` | Total tRPC procedures across all routers |
+| `i18n_source_lang`      | Source locale code (e.g. `zh-CN`)        |
+| `i18n_namespace_count`  | Number of i18n namespaces                |
+| `auth_providers`        | List of detected auth provider names     |
+| `server_modules_count`  | Number of server-side modules            |
+| `ai_providers_count`    | Number of LLM / AI providers             |
+| `sso_providers_count`   | Number of SSO providers                  |
+| `hooks_count`           | Number of custom React hooks             |
+| `scripts_count`         | Number of automation scripts             |
+| `env_vars_total`        | Total environment variables found        |
+| `libs_count`            | Number of integration libraries          |
 
 **Example:**
 
@@ -297,13 +321,23 @@ All scan commands write to `.repo_intelligence/` inside the target repository:
 
 ```
 <repo>/.repo_intelligence/
-├── structure.json      ← Full merged scan result (all detectors)
-├── routes.json         ← Route list
-├── components.json     ← Component list
-├── services.json       ← Service list
-├── database.json       ← Database ORM list
-├── packages.json       ← Categorised package catalog
-└── repo_summary.json   ← High-level summary (counts)
+├── structure.json        ← Full merged scan result (all 17 detectors)
+├── routes.json           ← Route list
+├── components.json       ← Component list
+├── services.json         ← Service list
+├── database.json         ← Database ORM list
+├── packages.json         ← Categorised package catalog
+├── stores.json           ← Zustand store modules and slices
+├── trpc_routers.json     ← tRPC routers per tier with procedures
+├── i18n.json             ← i18n config, locales, and namespaces
+├── auth.json             ← Auth providers, session strategy, middleware
+├── server_modules.json   ← Server-side module inventory
+├── agent_runtime.json    ← LLM provider capabilities + SSO providers
+├── env_vars.json         ← Environment variables by category
+├── hooks.json            ← Custom React hook catalog
+├── scripts.json          ← Automation scripts inventory
+├── libs.json             ← Integration library catalog
+└── repo_summary.json     ← High-level summary (counts)
 ```
 
 Python code indexing writes to:

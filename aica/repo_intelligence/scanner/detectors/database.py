@@ -33,8 +33,27 @@ _RE_TYPEORM_COLUMN = re.compile(
     r"@(?:Column|PrimaryColumn|PrimaryGeneratedColumn)\b[^)]*\)\s*\n\s*([a-zA-Z_$][\w$]*)\s*[!?]?\s*:"
 )
 
+# Drizzle relation-helper call — signals a relations() definition
+_RE_DRIZZLE_RELATIONS = re.compile(
+    r"(?:pgTable|mysqlTable|sqliteTable|relations)\s*\([^)]*\)",
+    re.DOTALL,
+)
+
+# Standalone relations() call: relations(tableName, (helpers) => ({...}))
+_RE_DRIZZLE_RELATION_DEF = re.compile(
+    r"\brelations\s*\(\s*(\w+)\s*,"
+)
+
 # Directories to scan for Drizzle schema files
-_DRIZZLE_SCAN_DIRS = ("db", "drizzle", "src/db", "src/drizzle")
+_DRIZZLE_SCAN_DIRS = (
+    "db",
+    "drizzle",
+    "database",
+    "src/db",
+    "src/drizzle",
+    "src/database",
+    "src/database/schemas",  # zuru-gpt pattern
+)
 
 # Entity directories for TypeORM
 _TYPEORM_ENTITY_DIRS = ("src/entities", "src/entity", "entities", "entity")
@@ -167,8 +186,41 @@ class DatabaseDetector:
         for file_path in ts_files:
             models.extend(self._extract_drizzle_models(file_path, repo_path, seen_names))
 
-        log.debug("database.drizzle.found", models=len(models), schema=schema_rel)
-        return {"orm": "Drizzle", "schema": schema_rel, "models": models}
+        # Detect relations defined in the scanned files
+        relations = self._extract_drizzle_relations(ts_files)
+
+        # Detect migration directory
+        migration_dir = self._detect_migration_dir(repo_path)
+
+        # Detect server-side model files (e.g. src/database/server/models/)
+        db_models = self._detect_db_server_models(repo_path)
+
+        # Detect repository subdirectories (e.g. src/database/repositories/)
+        repositories = self._detect_repositories(repo_path)
+
+        # Detect client DB files (e.g. src/database/client/)
+        client_files = self._detect_client_files(repo_path)
+
+        # Count migration SQL files
+        migration_count = self._count_migrations(repo_path, migration_dir)
+
+        log.debug(
+            "database.drizzle.found",
+            models=len(models),
+            relations=len(relations),
+            schema=schema_rel,
+        )
+        return {
+            "orm": "Drizzle",
+            "schema": schema_rel,
+            "models": models,
+            "relations": relations,
+            "migration_dir": migration_dir,
+            "db_models": db_models,
+            "repositories": repositories,
+            "client_files": client_files,
+            "migration_count": migration_count,
+        }
 
     def _extract_drizzle_models(
         self, file_path: Path, repo_path: Path, seen_names: set[str]
@@ -210,6 +262,87 @@ class DatabaseDetector:
             found.append({"name": table_name, "fields": fields})
 
         return found
+
+    def _extract_drizzle_relations(self, ts_files: list[Path]) -> list[str]:
+        """Return deduplicated table names that have a relations() definition."""
+        seen: set[str] = set()
+        for file_path in ts_files:
+            try:
+                content = file_path.read_text(encoding="utf-8", errors="ignore")
+            except OSError:
+                continue
+            for m in _RE_DRIZZLE_RELATION_DEF.finditer(content):
+                seen.add(m.group(1))
+        return sorted(seen)
+
+    def _detect_migration_dir(self, repo_path: Path) -> str | None:
+        """Return relative path of the first detected migration directory."""
+        candidates = [
+            "drizzle/migrations",
+            "src/database/migrations",
+            "src/db/migrations",
+            "migrations",
+        ]
+        for candidate in candidates:
+            if (repo_path / candidate).is_dir():
+                return candidate
+        return None
+
+    def _detect_db_server_models(self, repo_path: Path) -> list[dict]:
+        """Return model file descriptors from src/database/server/models/."""
+        for candidate in ("src/database/server/models", "src/db/models", "src/models"):
+            models_dir = repo_path / candidate
+            if not models_dir.is_dir():
+                continue
+            entries: list[dict] = []
+            for f in sorted(models_dir.glob("*.ts")):
+                if f.name.startswith(("_", "index")):
+                    continue
+                rel = f.relative_to(repo_path).as_posix()
+                entries.append({"name": f.stem, "file": rel})
+            # Also include sub-directories (e.g. ragEval/)
+            for sub in sorted(models_dir.iterdir()):
+                if sub.is_dir() and not sub.name.startswith(("_", ".")):
+                    for f in sorted(sub.glob("*.ts")):
+                        if not f.name.startswith(("_", "index")):
+                            rel = f.relative_to(repo_path).as_posix()
+                            entries.append({"name": f.stem, "file": rel})
+            return entries
+        return []
+
+    def _detect_repositories(self, repo_path: Path) -> list[str]:
+        """Return subdirectory names from src/database/repositories/."""
+        for candidate in ("src/database/repositories", "src/db/repositories", "src/repositories"):
+            repos_dir = repo_path / candidate
+            if not repos_dir.is_dir():
+                continue
+            return sorted(
+                d.name for d in repos_dir.iterdir()
+                if d.is_dir() and not d.name.startswith((".", "_"))
+            )
+        return []
+
+    def _detect_client_files(self, repo_path: Path) -> list[str]:
+        """Return relative paths of .ts files in src/database/client/."""
+        for candidate in ("src/database/client", "src/db/client"):
+            client_dir = repo_path / candidate
+            if not client_dir.is_dir():
+                continue
+            return sorted(
+                f.relative_to(repo_path).as_posix()
+                for f in client_dir.glob("*.ts")
+                if not f.name.startswith("_")
+            )
+        return []
+
+    def _count_migrations(self, repo_path: Path, migration_dir: str | None) -> int:
+        """Count SQL migration files in migration_dir."""
+        if migration_dir is None:
+            return 0
+        d = repo_path / migration_dir
+        if not d.is_dir():
+            return 0
+        return sum(1 for f in d.glob("*.sql"))
 
     # ── TypeORM ───────────────────────────────────────────────────────────────
 

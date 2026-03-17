@@ -17,15 +17,15 @@ AICA is a local, CLI-first AI coding automation engine. It orchestrates AI agent
 
 ## Overview
 
-| Capability            | Description                                                                                  |
-| --------------------- | -------------------------------------------------------------------------------------------- |
-| **Repo Intelligence** | Deep-scan Next.js / Python repos — detects routes, components, services, databases, packages |
-| **LLM Integration**   | Pluggable provider facade (Ollama & OpenRouter) with retry, streaming, and async APIs        |
-| **Task Planning**     | Structured multi-step execution plans for coding tasks                                       |
-| **Code Execution**    | Safe subprocess wrapper with captured output and timeout support                             |
-| **Extensible Agents** | `BaseAgent` ABC dispatched by an `Orchestrator` registry                                     |
-| **Pluggable Memory**  | Swappable `MemoryStore` backends (in-memory by default)                                      |
-| **Rich CLI**          | 8 commands with beautiful `rich` tables and panels                                           |
+| Capability            | Description                                                                                                                                                                                                                      |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Repo Intelligence** | Deep-scan Next.js / Python repos — 17 detectors covering routes, components, services, database, packages, Zustand stores, tRPC routers, i18n, auth providers, server modules, LLM providers, env vars, hooks, scripts, and libs |
+| **LLM Integration**   | Pluggable provider facade (Ollama & OpenRouter) with retry, streaming, and async APIs                                                                                                                                            |
+| **Task Planning**     | Structured multi-step execution plans for coding tasks                                                                                                                                                                           |
+| **Code Execution**    | Safe subprocess wrapper with captured output and timeout support                                                                                                                                                                 |
+| **Extensible Agents** | `BaseAgent` ABC dispatched by an `Orchestrator` registry                                                                                                                                                                         |
+| **Pluggable Memory**  | Swappable `MemoryStore` backends (in-memory by default)                                                                                                                                                                          |
+| **Rich CLI**          | 8 commands with beautiful `rich` tables and panels                                                                                                                                                                               |
 
 ---
 
@@ -44,7 +44,7 @@ AICA is a local, CLI-first AI coding automation engine. It orchestrates AI agent
     │  LLM Layer │   │  Repo Intel  │  │  Execution   │
     │            │   │              │  │              │
     │  Ollama    │   │  Scanner     │  │  Runner      │
-    │  OpenRouter│   │  Detectors × 7│ │  Terminal    │
+    │  OpenRouter│   │  Detectors ×17│ │  Terminal    │
     │  (factory) │   │  Summarizer  │  │  Runner      │
     └─────┬──────┘   └───────┬──────┘  └──────────────┘
           │                  │
@@ -65,16 +65,26 @@ AICA is a local, CLI-first AI coding automation engine. It orchestrates AI agent
 
 ```
 CLI → RepositoryScanner.scan(path)
-        ├── FrameworkDetector   → framework, language, next_version
-        ├── StructureDetector   → src dirs, config files
-        ├── RouteDetector       → routes list
-        ├── ComponentDetector   → components list
-        ├── ServiceDetector     → services list
-        ├── DatabaseDetector    → ORM, schema, models
-        └── PackageDetector     → categorised packages
+        ├── FrameworkDetector      → framework, language, next_version
+        ├── StructureDetector      → src dirs, config files
+        ├── RouteDetector          → routes list
+        ├── ComponentDetector      → components list
+        ├── ServiceDetector        → services list
+        ├── DatabaseDetector       → ORM, schema, models
+        ├── PackageDetector        → categorised packages
+        ├── ZustandStoreDetector   → stores, slices, middleware
+        ├── TRPCRouterDetector     → tRPC routers, procedures
+        ├── I18nDetector           → locales, namespaces
+        ├── AuthDetector           → providers, session strategy
+        ├── ServerModulesDetector  → server module inventory
+        ├── AgentRuntimeDetector   → LLM providers, SSO providers
+        ├── EnvVarsDetector        → env var categories
+        ├── HooksDetector          → custom React hooks
+        ├── ScriptsDetector        → automation scripts
+        └── LibsDetector           → integration libraries
             │
             ▼
-      OutputWriter → .repo_intelligence/*.json
+      OutputWriter → .repo_intelligence/*.json  (15 files + repo_summary.json)
             │
             ▼
     RepoSummaryGenerator → repo_summary.json
@@ -135,13 +145,23 @@ Outputs are written to `.repo_intelligence/` inside the target repo:
 
 ```
 .repo_intelligence/
+  structure.json        ← full merged scan result
   routes.json
   components.json
   services.json
   database.json
   packages.json
-  structure.json
-  repo_summary.json
+  stores.json
+  trpc_routers.json
+  i18n.json
+  auth.json
+  server_modules.json
+  agent_runtime.json
+  env_vars.json
+  hooks.json
+  scripts.json
+  libs.json
+  repo_summary.json     ← high-level counts summary
 ```
 
 ### 5. Plan and execute tasks

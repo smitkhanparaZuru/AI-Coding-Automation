@@ -3,13 +3,23 @@ from __future__ import annotations
 from pathlib import Path
 
 from aica.core.logging import get_logger
+from aica.repo_intelligence.scanner.detectors.agent_runtime import AgentRuntimeDetector
+from aica.repo_intelligence.scanner.detectors.auth import AuthDetector
 from aica.repo_intelligence.scanner.detectors.components import ComponentDetector
 from aica.repo_intelligence.scanner.detectors.database import DatabaseDetector
+from aica.repo_intelligence.scanner.detectors.env_vars import EnvVarsDetector
 from aica.repo_intelligence.scanner.detectors.framework import FrameworkDetector
+from aica.repo_intelligence.scanner.detectors.hooks import HooksDetector
+from aica.repo_intelligence.scanner.detectors.i18n import I18nDetector
+from aica.repo_intelligence.scanner.detectors.libs import LibsDetector
 from aica.repo_intelligence.scanner.detectors.packages import PackageDetector
 from aica.repo_intelligence.scanner.detectors.routes import RouteDetector
+from aica.repo_intelligence.scanner.detectors.scripts import ScriptsDetector
+from aica.repo_intelligence.scanner.detectors.server_modules import ServerModulesDetector
 from aica.repo_intelligence.scanner.detectors.services import ServiceDetector
+from aica.repo_intelligence.scanner.detectors.stores import ZustandStoreDetector
 from aica.repo_intelligence.scanner.detectors.structure import StructureDetector
+from aica.repo_intelligence.scanner.detectors.trpc import TRPCRouterDetector
 
 log = get_logger("repo.scanner.core")
 
@@ -25,6 +35,16 @@ class RepositoryScanner:
         self._services = ServiceDetector()
         self._database = DatabaseDetector()
         self._packages = PackageDetector()
+        self._stores = ZustandStoreDetector()
+        self._trpc = TRPCRouterDetector()
+        self._i18n = I18nDetector()
+        self._auth = AuthDetector()
+        self._server_modules = ServerModulesDetector()
+        self._agent_runtime = AgentRuntimeDetector()
+        self._env_vars = EnvVarsDetector()
+        self._hooks = HooksDetector()
+        self._scripts = ScriptsDetector()
+        self._libs = LibsDetector()
 
     def scan(self, repo_path: Path) -> dict:
         """Scan *repo_path* and return merged metadata.
@@ -49,6 +69,16 @@ class RepositoryScanner:
         services_list = self._services.detect(repo_path)
         database_list = self._database.detect(repo_path)
         packages_meta = self._packages.detect(repo_path)
+        stores_list = self._stores.detect(repo_path)
+        trpc_list = self._trpc.detect(repo_path)
+        i18n_meta = self._i18n.detect(repo_path)
+        auth_meta = self._auth.detect(repo_path)
+        server_modules_list = self._server_modules.detect(repo_path)
+        agent_runtime_meta = self._agent_runtime.detect(repo_path)
+        env_vars_meta = self._env_vars.detect(repo_path)
+        hooks_list = self._hooks.detect(repo_path)
+        scripts_list = self._scripts.detect(repo_path)
+        libs_list = self._libs.detect(repo_path)
 
         result: dict = {
             **framework_meta,
@@ -58,6 +88,16 @@ class RepositoryScanner:
             "services": services_list,
             "database": database_list,
             "packages": packages_meta,
+            "stores": stores_list,
+            "trpc_routers": trpc_list,
+            "i18n": i18n_meta,
+            "auth": auth_meta,
+            "server_modules": server_modules_list,
+            "agent_runtime": agent_runtime_meta,
+            "env_vars": env_vars_meta,
+            "hooks": hooks_list,
+            "scripts": scripts_list,
+            "libs": libs_list,
             "repo_path": str(repo_path),
         }
 
@@ -71,7 +111,16 @@ class RepositoryScanner:
             components=len(components_list),
             services=len(services_list),
             database=len(database_list),
+            stores=len(stores_list),
+            trpc_routers=len(trpc_list),
+            i18n_namespaces=i18n_meta.get("namespace_count", 0),
+            auth_providers=len(auth_meta.get("providers", [])),
             pkg_framework=packages_meta.get("framework"),
+            server_modules=len(server_modules_list),
+            llm_providers=len(agent_runtime_meta.get("llm_providers", [])),
+            hooks=len(hooks_list),
+            scripts=len(scripts_list),
+            libs=len(libs_list),
         )
         return result
 
