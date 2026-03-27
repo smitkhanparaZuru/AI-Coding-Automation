@@ -13,6 +13,7 @@ from aica.config import get_settings
 from aica.core import TaskPlanner
 from aica.core.logging import get_logger, setup_logging
 from aica.execution import ExecutionRunner
+from aica.memory.graph_store.neo4j_client import GraphAuthError, GraphConnectionError, GraphQueryError
 from aica.memory.graph_store.graph_builder import build_dependency_graph
 from aica.repo_intelligence.ast.extractors import build_call_graph
 from aica.repo_intelligence.ast.runner import ASTExtractorRunner
@@ -20,6 +21,7 @@ from aica.repo_intelligence.ast.writer import ASTWriter
 from aica.repo_intelligence.scanner import scan_repository
 from aica.repo_intelligence.scanner.summarizer import RepoSummaryGenerator
 from aica.repo_intelligence.scanner.writers import OutputWriter
+from aica.repo_intelligence.sync import NoChangesError, SyncError, sync_repository
 
 app = typer.Typer(
     name="aica",
@@ -169,7 +171,18 @@ def _render_verbose_tables(data: dict, console: Console) -> None:
     pkg_table.add_column("Category", style="dim", min_width=16)
     pkg_table.add_column("Packages")
     pkg_table.add_row("framework", packages.get("framework") or "—")
-    for category in ("ui", "database", "auth", "state", "ai_sdk", "sync", "file_parsing", "monitoring", "payment", "realtime"):
+    for category in (
+        "ui",
+        "database",
+        "auth",
+        "state",
+        "ai_sdk",
+        "sync",
+        "file_parsing",
+        "monitoring",
+        "payment",
+        "realtime",
+    ):
         items: list = packages.get(category, [])
         pkg_table.add_row(category, ", ".join(items) if items else "—")
     console.print(Panel(pkg_table, title="[bold]Packages[/bold]", border_style="cyan"))
@@ -497,6 +510,111 @@ def index_code(
     console.print(f"[dim]Hooks saved to:[/dim]       [green]{hooks_path}[/green]")
     console.print(f"[dim]Components saved to:[/dim]  [green]{components_path}[/green]")
     console.print(f"[dim]Types saved to:[/dim]       [green]{types_path}[/green]")
+
+
+@app.command(name="sync-repo")
+def sync_repo(
+    path: Annotated[
+        Path | None,
+        typer.Option("--path", help="Path to the repository to sync."),
+    ] = None,
+    base: Annotated[
+        str,
+        typer.Option("--base", help="Git ref to compare against when the working tree is clean."),
+    ] = "HEAD",
+    full: Annotated[
+        bool,
+        typer.Option("--full", help="Force a full reindex instead of incremental sync."),
+    ] = False,
+    threshold: Annotated[
+        float | None,
+        typer.Option(
+            "--threshold",
+            min=0.0,
+            max=1.0,
+            help="Override incremental fallback threshold (0.0-1.0).",
+        ),
+    ] = None,
+    verbose: Annotated[
+        bool,
+        typer.Option("--verbose", help="Render changed file lists in addition to the summary."),
+    ] = False,
+) -> None:
+    """Sync repository changes via incremental update with automatic full fallback."""
+    settings = get_settings()
+    target = (path or settings.workspace_dir).resolve()
+    log.info("cli.sync_repo.start", path=str(target), base_ref=base, force_full=full)
+
+    try:
+        result = sync_repository(
+            target,
+            base_ref=base,
+            force_full=full,
+            fallback_threshold=threshold,
+        )
+    except NoChangesError as exc:
+        console.print(f"[yellow]{exc}[/yellow]")
+        raise typer.Exit(code=0) from exc
+    except SyncError as exc:
+        console.print(f"[red]Error:[/red] {exc}")
+        raise typer.Exit(code=1) from exc
+    except GraphConnectionError as exc:
+        console.print(
+            "[red]Neo4j connection failed:[/red] "
+            f"{exc}\nStart Neo4j and verify AICA_NEO4J_URI/AICA_NEO4J_USER/AICA_NEO4J_PASSWORD."
+        )
+        raise typer.Exit(code=1) from exc
+    except GraphAuthError as exc:
+        console.print(
+            "[red]Neo4j authentication failed:[/red] "
+            f"{exc}\nCheck AICA_NEO4J_USER/AICA_NEO4J_PASSWORD."
+        )
+        raise typer.Exit(code=1) from exc
+    except GraphQueryError as exc:
+        console.print(f"[red]Neo4j query failed:[/red] {exc}")
+        raise typer.Exit(code=1) from exc
+
+    summary = Table(show_header=True, header_style="bold cyan", box=None, padding=(0, 2))
+    summary.add_column("Metric", style="dim", min_width=24)
+    summary.add_column("Value")
+    summary.add_row("Mode", result.mode.title())
+    summary.add_row("Base ref", result.base_ref)
+    summary.add_row("Changed files", str(len(result.changed_files)))
+    summary.add_row("Deleted files", str(len(result.deleted_files)))
+
+    summary.add_row("", "")
+    summary.add_row("AST: Functions", str(result.ast_summary.get("functions", 0)))
+    summary.add_row("AST: Imports", str(result.ast_summary.get("imports", 0)))
+    summary.add_row("AST: Components", str(result.ast_summary.get("components", 0)))
+    summary.add_row("AST: Calls", str(result.ast_summary.get("calls", 0)))
+
+    summary.add_row("", "")
+    summary.add_row("Graph: Nodes deleted", str(result.graph_summary.nodes_deleted))
+    summary.add_row("Graph: Nodes created", str(result.graph_summary.nodes_created))
+    summary.add_row("Graph: Edges created", str(result.graph_summary.edges_created))
+    summary.add_row("Duration", f"{result.duration_seconds:.2f}s")
+
+    console.print(Panel(summary, title="[bold]Repository Sync Results[/bold]", border_style="cyan"))
+
+    if verbose:
+        details = Table(show_header=True, header_style="bold cyan", box=None, padding=(0, 2))
+        details.add_column("Category", style="dim", min_width=20)
+        details.add_column("Files")
+        details.add_row("Changed", "\n".join(result.changed_files) or "—")
+        details.add_row("Deleted", "\n".join(result.deleted_files) or "—")
+        if result.mode == "full" and not full:
+            details.add_row("Fallback", "Automatic full reindex triggered by change threshold")
+        elif full:
+            details.add_row("Fallback", "Forced full reindex via --full")
+        console.print(Panel(details, title="[bold]Changed Files[/bold]", border_style="cyan"))
+
+    log.info(
+        "cli.sync_repo.done",
+        changed=len(result.changed_files),
+        deleted=len(result.deleted_files),
+        mode=result.mode,
+        duration_seconds=round(result.duration_seconds, 3),
+    )
 
 
 @app.command(name="summarize-repo")

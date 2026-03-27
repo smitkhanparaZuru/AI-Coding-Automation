@@ -81,6 +81,19 @@ class Settings(BaseSettings):
         default=Path("."), description="Root path of the repository to analyse"
     )
 
+    # Sync
+    sync_fallback_threshold: float = Field(
+        default=0.20,
+        ge=0.0,
+        le=1.0,
+        description="Fallback to full sync when changed TS/TSX files exceed this percentage",
+    )
+    sync_max_ast_age_seconds: int = Field(
+        default=259200,
+        ge=0,
+        description="Maximum allowed age for AST artifacts before incremental graph update (0 disables)",
+    )
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:

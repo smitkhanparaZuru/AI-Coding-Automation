@@ -1,0 +1,12 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "type": "command",
+        "command": "pwsh -NoProfile -ExecutionPolicy Bypass -File .github/hooks/scripts/validate-patterns.ps1",
+        "timeout": 15,
+        "cwd": "${workspaceFolder}"
+      }
+    ]
+  }
+}

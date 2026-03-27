@@ -25,7 +25,7 @@ AICA is a local, CLI-first AI coding automation engine. It orchestrates AI agent
 | **Code Execution**    | Safe subprocess wrapper with captured output and timeout support                                                                                                                                                                                                   |
 | **Extensible Agents** | `BaseAgent` ABC dispatched by an `Orchestrator` registry                                                                                                                                                                                                           |
 | **Pluggable Memory**  | Swappable `MemoryStore` backends (in-memory by default)                                                                                                                                                                                                            |
-| **Rich CLI**          | 8 commands with beautiful `rich` tables and panels                                                                                                                                                                                                                 |
+| **Rich CLI**          | 9 commands with beautiful `rich` tables and panels                                                                                                                                                                                                                 |
 
 ---
 
@@ -35,7 +35,8 @@ AICA is a local, CLI-first AI coding automation engine. It orchestrates AI agent
 ┌─────────────────────────────────────────────────────────────────┐
 │                          CLI (Typer)                            │
 │  status · version · scan-repo [––verbose] · index-code      │
-│  summarize-repo · plan-task · run-task                        │
+│  sync-repo · summarize-repo · build-graph                    │
+│  plan-task · run-task                                         │
 └────────────────────────────┬────────────────────────────────────┘
                              │
           ┌──────────────────┼──────────────────┐
@@ -206,7 +207,7 @@ aica run-task "pytest tests/ -v" --cwd /path/to/project
 
 | Page                                | Description                                            |
 | ----------------------------------- | ------------------------------------------------------ |
-| [CLI Reference](cli.md)             | All 8 commands with options, arguments, examples       |
+| [CLI Reference](cli.md)             | All 9 commands with options, arguments, examples       |
 | [API Reference](api-reference.md)   | Public class and method signatures with usage examples |
 | [Neo4j Graph Guide](neo4j-graph.md) | **NEW:** Dependency graph schema, setup, queries       |
 

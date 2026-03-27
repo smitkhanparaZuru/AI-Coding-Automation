@@ -1,6 +1,6 @@
 # CLI Reference
 
-AICA provides 8 commands via the `aica` entry point.
+AICA provides 9 commands via the `aica` entry point.
 
 ```bash
 aica --help
@@ -262,6 +262,49 @@ aica index-code
 
 # Index a specific TypeScript/Next.js repository
 aica index-code --path /projects/my-nextjs-app
+```
+
+---
+
+### `aica sync-repo`
+
+Incrementally sync repository changes and update scanner/AST/graph artifacts. This command detects changed files from git state, applies targeted updates, and automatically falls back to full sync when change volume exceeds thresholds.
+
+```bash
+aica sync-repo [--path PATH] [--base REF] [--full] [--threshold N] [--verbose]
+```
+
+**Options:**
+
+| Option        | Type    | Default           | Description                                                      |
+| ------------- | ------- | ----------------- | ---------------------------------------------------------------- |
+| `--path`      | `Path`  | current directory | Repository root to sync                                          |
+| `--base`      | `str`   | `HEAD`            | Base git ref used when working tree is clean                     |
+| `--full`      | flag    | off               | Force full sync instead of incremental update                    |
+| `--threshold` | `float` | configured value  | Override incremental fallback threshold, between `0.0` and `1.0` |
+| `--verbose`   | flag    | off               | Render changed-file details in addition to the sync summary      |
+
+**Behaviour:**
+
+- Uses git diff/status to determine changed files
+- Updates `.repo_intelligence/` artifacts incrementally where possible
+- Can rebuild graph-related outputs when required by detected changes
+- Exits gracefully when no changes are detected
+
+**Examples:**
+
+```bash
+# Sync current repository changes
+aica sync-repo
+
+# Sync against main branch
+aica sync-repo --base origin/main
+
+# Force a full sync
+aica sync-repo --full
+
+# Show changed files and sync details
+aica sync-repo --verbose
 ```
 
 ---

@@ -1,0 +1,12 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "type": "command",
+        "command": "pwsh -NoProfile -ExecutionPolicy Bypass -File .github/hooks/scripts/auto-format.ps1",
+        "timeout": 30,
+        "cwd": "${workspaceFolder}"
+      }
+    ]
+  }
+}

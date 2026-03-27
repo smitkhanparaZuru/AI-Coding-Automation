@@ -1,0 +1,12 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "type": "command",
+        "command": "pwsh -NoProfile -ExecutionPolicy Bypass -File .github/hooks/scripts/session-stop.ps1",
+        "timeout": 5,
+        "cwd": "${workspaceFolder}"
+      }
+    ]
+  }
+}

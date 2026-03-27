@@ -106,7 +106,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Installation Guide** (`docs/installation.md`)
 - **Configuration Reference** (`docs/configuration.md`)
-- **CLI Reference** (`docs/cli.md`) — All 8 commands with examples
+- **CLI Reference** (`docs/cli.md`) — All 9 commands with examples
 - **Neo4j Graph Guide** (`docs/neo4j-graph.md`) — Comprehensive graph schema, setup, and 10+ query examples
 - **Tutorials** (`docs/tutorials.md`) — 3 step-by-step guides:
   - Quick Start (5 minutes)

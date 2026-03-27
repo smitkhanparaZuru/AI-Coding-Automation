@@ -45,7 +45,7 @@ See the full tutorials and examples in [docs/tutorials.md](docs/tutorials.md).
 - **Execution runner** — safe subprocess wrapper (`ExecutionRunner`) with captured stdout/stderr and a `RunResult` return type
 - **Pluggable memory** — `MemoryStore` ABC with an in-memory implementation; swap for a persistent backend without touching agent code
 - **Extensible tool system** — grow automation capabilities by subclassing `BaseTool`
-- **Rich CLI** — eight commands with beautiful `rich` panels via `typer`
+- **Rich CLI** — nine commands with beautiful `rich` panels via `typer`
 - **Layered config** — env vars → `.env` file → defaults via Pydantic Settings v2; secrets masked in logs
 
 ## Requirements
@@ -128,7 +128,7 @@ AICA_OPENROUTER_MODEL=openai/gpt-4o-mini
 aica --help
 ```
 
-**Eight commands** for repo analysis, code indexing, graph building, and task automation:
+**Nine commands** for repo analysis, code indexing, graph building, and task automation:
 
 | Command          | Description                                                                   |
 | ---------------- | ----------------------------------------------------------------------------- |
@@ -136,6 +136,7 @@ aica --help
 | `version`        | Print the installed AICA version                                              |
 | `scan-repo`      | Deep-scan a repo, write all 16 intelligence JSON files, and display a summary |
 | `index-code`     | Run TypeScript/TSX AST analysis and write to `.repo_intelligence/ast/`        |
+| `sync-repo`      | Incrementally sync changed files and update scanner/AST/graph artifacts       |
 | `summarize-repo` | Regenerate `repo_summary.json` from existing `.repo_intelligence/` artifacts  |
 | `build-graph`    | Build a Neo4j dependency graph from scanner + AST artifacts                   |
 | `plan-task`      | Generate a structured multi-step execution plan for a task                    |
@@ -158,6 +159,9 @@ aica summarize-repo --path /path/to/repo
 
 # Run TypeScript/TSX AST analysis on all source files
 aica index-code --path /path/to/repo
+
+# Incrementally sync repository changes
+aica sync-repo --path /path/to/repo
 
 # Generate an execution plan
 aica plan-task "Refactor the authentication module to use JWT"
@@ -228,7 +232,7 @@ aica/
 │   └── terminal/
 │       └── runner.py      # TerminalRunner — timeout + cwd management
 ├── interfaces/
-│   └── cli.py             # Typer CLI (7 commands)
+│   └── cli.py             # Typer CLI (9 commands)
 tests/                     # pytest suite
 ```
 

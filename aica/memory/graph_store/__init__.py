@@ -4,6 +4,14 @@ from aica.memory.graph_store.call_builder import (
     insert_call_edges,
     insert_hook_usage_edges,
 )
+from aica.memory.graph_store.delete_builder import (
+    DeleteSummary,
+    delete_graph_for_files,
+)
+from aica.memory.graph_store.incremental_builder import (
+    GraphUpdateSummary,
+    update_graph_for_files,
+)
 from aica.memory.graph_store.neo4j_client import (
     GraphAuthError,
     GraphConnectionError,
@@ -38,4 +46,8 @@ __all__ = [
     "insert_call_edges",
     "insert_hook_usage_edges",
     "setup_schema",
+     "DeleteSummary",
+     "delete_graph_for_files",
+     "GraphUpdateSummary",
+     "update_graph_for_files",
 ]

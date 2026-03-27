@@ -3,7 +3,10 @@ from unittest.mock import MagicMock, patch
 
 from typer.testing import CliRunner
 
+from aica.memory.graph_store.incremental_builder import GraphUpdateSummary
+from aica.memory.graph_store.neo4j_client import GraphConnectionError
 from aica.interfaces.cli import app
+from aica.repo_intelligence.sync import NoChangesError, SyncError, SyncResult
 
 runner = CliRunner()
 
@@ -182,3 +185,138 @@ def test_scan_repo_no_verbose_skips_entity_tables(nextjs_repo: Path) -> None:
     assert "scan complete" in result.output.lower()
     # The per-entity Framework panel header should NOT appear without --verbose
     assert "Package Manager" not in result.output
+
+
+# ── sync-repo ────────────────────────────────────────────────────────────────
+
+
+def test_sync_repo_shows_summary(tmp_path: Path) -> None:
+    result_payload = SyncResult(
+        changed_files=["src/app.ts"],
+        deleted_files=[],
+        mode="incremental",
+        base_ref="HEAD",
+        ast_summary={"functions": 2, "imports": 1, "components": 0, "calls": 3},
+        graph_summary=GraphUpdateSummary(
+            nodes_deleted=1,
+            nodes_created=4,
+            edges_created=3,
+            files_affected=["src/app.ts"],
+            duration_seconds=0.2,
+        ),
+        duration_seconds=0.25,
+    )
+
+    with patch("aica.interfaces.cli.sync_repository", return_value=result_payload):
+        result = runner.invoke(app, ["sync-repo", "--path", str(tmp_path)])
+
+    assert result.exit_code == 0
+    assert "Repository Sync Results" in result.output
+    assert "AST: Functions" in result.output
+
+
+def test_sync_repo_verbose_shows_file_lists(tmp_path: Path) -> None:
+    result_payload = SyncResult(
+        changed_files=["src/component.tsx"],
+        deleted_files=["src/old.ts"],
+        mode="incremental",
+        base_ref="HEAD~1",
+        ast_summary={"functions": 1, "imports": 2, "components": 1, "calls": 1},
+        graph_summary=GraphUpdateSummary(
+            nodes_deleted=2,
+            nodes_created=5,
+            edges_created=4,
+            files_affected=["src/component.tsx", "src/old.ts"],
+            duration_seconds=0.3,
+        ),
+        duration_seconds=0.5,
+    )
+
+    with patch("aica.interfaces.cli.sync_repository", return_value=result_payload):
+        result = runner.invoke(app, ["sync-repo", "--path", str(tmp_path), "--verbose"])
+
+    assert result.exit_code == 0
+    assert "Changed Files" in result.output
+    assert "src/old.ts" in result.output
+
+
+def test_sync_repo_returns_non_zero_on_sync_error(tmp_path: Path) -> None:
+    with patch("aica.interfaces.cli.sync_repository", side_effect=SyncError("boom")):
+        result = runner.invoke(app, ["sync-repo", "--path", str(tmp_path)])
+
+    assert result.exit_code != 0
+
+
+def test_sync_repo_returns_zero_when_no_changes_detected(tmp_path: Path) -> None:
+    with patch(
+        "aica.interfaces.cli.sync_repository",
+        side_effect=NoChangesError("No relevant TypeScript changes detected"),
+    ):
+        result = runner.invoke(app, ["sync-repo", "--path", str(tmp_path)])
+
+    assert result.exit_code == 0
+    assert "No relevant TypeScript changes detected" in result.output
+
+
+def test_sync_repo_passes_force_full_flag(tmp_path: Path) -> None:
+    result_payload = SyncResult(
+        changed_files=["src/app.ts"],
+        deleted_files=[],
+        mode="full",
+        base_ref="HEAD",
+        ast_summary={"functions": 2, "imports": 1, "components": 0, "calls": 3},
+        graph_summary=GraphUpdateSummary(
+            nodes_deleted=0,
+            nodes_created=10,
+            edges_created=11,
+            files_affected=["src/app.ts"],
+            duration_seconds=0.4,
+        ),
+        duration_seconds=0.4,
+    )
+
+    with patch("aica.interfaces.cli.sync_repository", return_value=result_payload) as sync_mock:
+        result = runner.invoke(app, ["sync-repo", "--path", str(tmp_path), "--full"])
+
+    assert result.exit_code == 0
+    sync_mock.assert_called_once()
+    assert sync_mock.call_args.kwargs["force_full"] is True
+
+
+def test_sync_repo_passes_threshold_flag(tmp_path: Path) -> None:
+    result_payload = SyncResult(
+        changed_files=["src/app.ts"],
+        deleted_files=[],
+        mode="incremental",
+        base_ref="HEAD",
+        ast_summary={"functions": 1, "imports": 1, "components": 0, "calls": 1},
+        graph_summary=GraphUpdateSummary(
+            nodes_deleted=0,
+            nodes_created=3,
+            edges_created=2,
+            files_affected=["src/app.ts"],
+            duration_seconds=0.2,
+        ),
+        duration_seconds=0.2,
+    )
+
+    with patch("aica.interfaces.cli.sync_repository", return_value=result_payload) as sync_mock:
+        result = runner.invoke(
+            app,
+            ["sync-repo", "--path", str(tmp_path), "--threshold", "0.15"],
+        )
+
+    assert result.exit_code == 0
+    sync_mock.assert_called_once()
+    assert sync_mock.call_args.kwargs["fallback_threshold"] == 0.15
+
+
+def test_sync_repo_handles_graph_connection_error(tmp_path: Path) -> None:
+    with patch(
+        "aica.interfaces.cli.sync_repository",
+        side_effect=GraphConnectionError("neo4j unavailable"),
+    ):
+        result = runner.invoke(app, ["sync-repo", "--path", str(tmp_path)])
+
+    assert result.exit_code != 0
+    assert "Neo4j connection failed" in result.output
