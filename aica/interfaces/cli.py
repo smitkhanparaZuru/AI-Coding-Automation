@@ -13,6 +13,7 @@ from aica.config import get_settings
 from aica.core import TaskPlanner
 from aica.core.logging import get_logger, setup_logging
 from aica.execution import ExecutionRunner
+from aica.memory.graph_store.graph_builder import build_dependency_graph
 from aica.repo_intelligence.ast.extractors import build_call_graph
 from aica.repo_intelligence.ast.runner import ASTExtractorRunner
 from aica.repo_intelligence.ast.writer import ASTWriter
@@ -534,6 +535,87 @@ def summarize_repo(
     out_path = artifact_dir / "repo_summary.json"
     log.info("cli.summarize_repo.done", output=str(out_path))
     console.print(f"[dim]Summary saved to:[/dim] [green]{out_path}[/green]")
+
+
+@app.command(name="build-graph")
+def build_graph(
+    path: Annotated[
+        Path | None,
+        typer.Option("--path", help="Path to the repository to build graph from."),
+    ] = None,
+) -> None:
+    """Build Neo4j dependency graph from AST and scanner artifacts.
+
+    This command loads all AST JSONs (imports, functions, calls, hooks, components, types)
+    and scanner JSONs (routes, services, stores) from .repo_intelligence/ and writes them
+    into a Neo4j graph database.
+
+    Note: This adds to existing graph data. To start fresh, clear the database first via
+    Neo4j Browser or Cypher: MATCH (n) DETACH DELETE n
+    """
+    settings = get_settings()
+    target = (path or settings.workspace_dir).resolve()
+    log.info("cli.build_graph.start", path=str(target))
+
+    artifact_dir = target / ".repo_intelligence"
+    if not artifact_dir.is_dir():
+        console.print(
+            f"[red]Error:[/red] No .repo_intelligence/ directory found at {target}.\n"
+            "Run [bold]aica scan-repo[/bold] first to generate the artifact files."
+        )
+        raise typer.Exit(code=1)
+
+    try:
+        summary = build_dependency_graph(target)
+    except Exception as e:
+        console.print(f"[red]Error building graph:[/red] {e}")
+        log.error("cli.build_graph.error", error=str(e))
+        raise typer.Exit(code=1)
+
+    # Build results table
+    results_table = Table(show_header=True, header_style="bold cyan", box=None, padding=(0, 2))
+    results_table.add_column("Category", style="dim", min_width=20)
+    results_table.add_column("Count", justify="right")
+
+    # Node counts
+    results_table.add_row("Files", str(summary.files))
+    results_table.add_row("Functions", str(summary.functions))
+    results_table.add_row("Components", str(summary.components))
+    results_table.add_row("Types", str(summary.types))
+    results_table.add_row("Hooks", str(summary.hooks))
+    results_table.add_row("Routes", str(summary.routes))
+    results_table.add_row("Services", str(summary.services))
+    results_table.add_row("Stores", str(summary.stores))
+
+    # Calculated totals
+    total_nodes = (
+        summary.files + summary.functions + summary.components + summary.types +
+        summary.hooks + summary.routes + summary.services + summary.stores
+    )
+    results_table.add_row("[bold]Total Nodes[/bold]", f"[bold]{total_nodes}[/bold]")
+
+    # Edge counts
+    results_table.add_row("", "")  # Spacer
+    results_table.add_row("Import Edges", str(summary.import_edges))
+    results_table.add_row("Call Edges", str(summary.call_edges))
+    results_table.add_row("Hook Usage Edges", str(summary.hook_edges))
+
+    total_edges = summary.import_edges + summary.call_edges + summary.hook_edges
+    results_table.add_row("[bold]Total Edges[/bold]", f"[bold]{total_edges}[/bold]")
+
+    console.print(
+        Panel(
+            results_table,
+            title="[bold]Dependency Graph Built[/bold]",
+            border_style="cyan",
+        )
+    )
+    log.info(
+        "cli.build_graph.done",
+        nodes=total_nodes,
+        edges=total_edges,
+        database=settings.neo4j_database,
+    )
 
 
 @app.command(name="plan-task")

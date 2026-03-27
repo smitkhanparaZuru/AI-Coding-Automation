@@ -64,6 +64,18 @@ class Settings(BaseSettings):
         default="bolt://localhost:7687", description="Graph database URL (e.g. Neo4j)"
     )
 
+    # Neo4j
+    neo4j_uri: str = Field(
+        default="bolt://localhost:7687",
+        description="Neo4j connection URI (bolt:// for local Docker, neo4j+s:// for AuraDB)",
+    )
+    neo4j_user: str = Field(default="neo4j", description="Neo4j username")
+    neo4j_password: SecretStr = Field(
+        default=SecretStr(""),
+        description="Neo4j password (masked in logs) — set via AICA_NEO4J_PASSWORD",
+    )
+    neo4j_database: str = Field(default="neo4j", description="Neo4j target database")
+
     # Repository
     repo_path: Path = Field(
         default=Path("."), description="Root path of the repository to analyse"

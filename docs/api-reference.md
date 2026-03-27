@@ -640,3 +640,406 @@ def setup_logging(log_level: str = "INFO", debug: bool = False) -> None:
     Called once at CLI startup via the global Typer callback.
     """
 ```
+
+---
+
+## Usage Examples
+
+### LLMProvider — Generate Text
+
+```python
+from aica.core.llm.factory import LLMProvider
+
+# Initialize with Ollama
+provider = LLMProvider(provider="ollama", model="codellama")
+
+# Synchronous generation
+prompt = "Write a Python function to calculate factorial"
+response = provider.generate(prompt)
+print(response)
+
+# Streaming generation
+for chunk in provider.stream(prompt):
+    print(chunk, end="", flush=True)
+```
+
+### LLMProvider — Async Usage
+
+```python
+import asyncio
+from aica.core.llm.factory import LLMProvider
+
+async def main():
+    provider = LLMProvider(provider="openrouter", model="openai/gpt-4o-mini")
+
+    # Async generation
+    response = await provider.async_generate("Explain async/await in Python")
+    print(response)
+
+    # Async streaming
+    async for chunk in provider.async_stream("Write a haiku about coding"):
+        print(chunk, end="", flush=True)
+
+asyncio.run(main())
+```
+
+### LLMProvider — Custom Provider
+
+```python
+from aica.core.llm.factory import LLMProvider
+from aica.core.llm.base import BaseLLMProvider
+from typing import Iterator, AsyncIterator
+
+class MyCustomProvider(BaseLLMProvider):
+    def __init__(self, model: str, api_key: str):
+        self.model = model
+        self.api_key = api_key
+
+    def generate(self, prompt: str, **kwargs) -> str:
+# Call your API and return result
+        return f"Response from {self.model}: {prompt}"
+
+    def stream(self, prompt: str, **kwargs) -> Iterator[str]:
+        # Yield tokens as they arrive
+        for token in prompt.split():
+            yield token + " "
+
+    async def async_generate(self, prompt: str, **kwargs) -> str:
+        return self.generate(prompt, **kwargs)
+
+    async def async_stream(self, prompt: str, **kwargs) -> AsyncIterator[str]:
+        for token in self.stream(prompt, **kwargs):
+            yield token
+
+# Register and use
+LLMProvider.register("mycustom", MyCustomProvider)
+provider = LLMProvider(provider="mycustom", model="my-model-v1")
+print(provider.generate("Hello"))
+```
+
+### RepositoryScanner — Scan a Codebase
+
+```python
+from pathlib import Path
+from aica.repo_intelligence.scanner.core import scan_repository
+from aica.repo_intelligence.scanner.writers import OutputWriter
+
+# Scan a repository
+repo_path = Path("/path/to/nextjs-app")
+scan_data = scan_repository(str(repo_path))
+
+# Access results
+print(f"Framework: {scan_data['framework']}")
+print(f"Routes found: {len(scan_data['routes'])}")
+print(f"Components found: {len(scan_data['components'])}")
+print(f"Zustand stores: {len(scan_data['stores'])}")
+
+# Write results to disk
+writer = OutputWriter()
+writer.write(scan_data['routes'], repo_path, "routes.json")
+writer.write(scan_data['components'], repo_path, "components.json")
+writer.write(scan_data, repo_path, "structure.json")
+```
+
+### RepositoryScanner — Generate Summary
+
+```python
+from pathlib import Path
+from aica.repo_intelligence.scanner.summarizer import RepoSummaryGenerator
+from aica.repo_intelligence.scanner.core import scan_repository
+
+repo_path = Path("/path/to/nextjs-app")
+
+# Option 1: From existing artifacts on disk
+summarizer = RepoSummaryGenerator()
+summary = summarizer.generate(repo_path)
+
+# Option 2: From in-memory scan data
+scan_data = scan_repository(str(repo_path))
+summary = RepoSummaryGenerator.from_scan_data(scan_data)
+
+# Access summary
+print(f"Total routes: {summary['routes_count']}")
+print(f"Total components: {summary['components_count']}")
+print(f"Database ORM: {summary['database']}")
+print(f"Auth providers: {summary['auth_providers']}")
+```
+
+### ASTExtractorRunner — Extract AST Data
+
+```python
+from pathlib import Path
+from aica.repo_intelligence.ast.runner import ASTExtractorRunner
+from aica.repo_intelligence.ast.writer import ASTWriter
+from aica.repo_intelligence.ast.extractors import build_call_graph
+
+repo_path = Path("/path/to/typescript-project")
+
+# Run all extractors
+runner = ASTExtractorRunner()
+ast_data = runner.run(repo_path)
+
+# Access results
+print(f"Functions found: {len(ast_data['functions'])}")
+print(f"Imports found: {len(ast_data['imports'])}")
+print(f"Components found: {len(ast_data['components'])}")
+
+# Build call graph
+call_graph = build_call_graph(ast_data['calls'])
+
+# Write to disk
+writer = ASTWriter()
+writer.write(ast_data['imports'], repo_path, "imports.json")
+writer.write(ast_data['functions'], repo_path, "functions.json")
+writer.write(call_graph, repo_path, "call_graph.json")
+```
+
+### AST Extractors — Use Individual Extractors
+
+```python
+from pathlib import Path
+from aica.repo_intelligence.ast.parser import parse_file
+from aica.repo_intelligence.ast.extractors import (
+    extract_functions,
+    extract_imports,
+    extract_components,
+    extract_hooks,
+)
+
+# Parse a single file
+file_path = Path("src/components/Button.tsx")
+tree = parse_file(file_path)
+source_code = file_path.read_text()
+
+# Extract specific data
+functions = extract_functions(tree, source_code, str(file_path))
+imports = extract_imports(tree, source_code, str(file_path))
+components = extract_components(tree, source_code, str(file_path))
+hooks = extract_hooks(tree, source_code, str(file_path))
+
+print(f"Functions in {file_path.name}:")
+for fn in functions:
+    print(f"  - {fn['name']} ({fn['kind']}, line {fn['line']})")
+
+print(f"\nImports:")
+for imp in imports:
+    print(f"  - {imp['source']} ({imp['import_kind']})")
+
+print(f"\nComponents:")
+for comp in components:
+    print(f"  - {comp['name']} with props: {comp['props']}")
+```
+
+### Neo4j — Build Dependency Graph
+
+```python
+from pathlib import Path
+from aica.memory.graph_store.graph_builder import build_dependency_graph
+
+repo_path = Path("/path/to/nextjs-app")
+
+# Build the graph (requires Neo4j running and configured)
+summary = build_dependency_graph(repo_path)
+
+# Access summary
+print(f"Nodes created:")
+print(f"  Files: {summary.files}")
+print(f"  Functions: {summary.functions}")
+print(f"  Components: {summary.components}")
+print(f"  Types: {summary.types}")
+print(f"  Hooks: {summary.hooks}")
+
+print(f"\nEdges created:")
+print(f"  Import edges: {summary.import_edges}")
+print(f"  Call edges: {summary.call_edges}")
+print(f"  Hook usage edges: {summary.hook_usage_edges}")
+```
+
+### Neo4j — Query the Graph
+
+```python
+from aica.memory.graph_store.neo4j_client import Neo4jClient
+
+# Connect to Neo4j
+with Neo4jClient(
+    uri="bolt://localhost:7687",
+    user="neo4j",
+    password="your_password"
+) as client:
+    # Find all components using useState
+    query = """
+        MATCH (comp:Component)-[:USES_HOOK]->(hook:Hook {name: 'useState'})
+        RETURN comp.name, comp.file
+        ORDER BY comp.name
+    """
+    result = client.run_query(query)
+
+    print("Components using useState:")
+    for record in result:
+        print(f"  - {record['comp.name']} ({record['comp.file']})")
+
+    # Find circular dependencies
+    query = """
+        MATCH path = (f:File)-[:IMPORTS*2..5]->(f)
+        RETURN [node IN nodes(path) | node.path] AS cycle
+        LIMIT 10
+    """
+    result = client.run_query(query)
+
+    print("\nCircular dependencies:")
+    for record in result:
+        print(f"  → {' → '.join(record['cycle'])}")
+```
+
+### Neo4j — Batch Operations
+
+```python
+from aica.memory.graph_store.neo4j_client import Neo4jClient
+
+with Neo4jClient() as client:  # Uses env vars for connection
+    # Batch create nodes
+    files_data = [
+        {"path": "src/app.ts"},
+        {"path": "src/utils.ts"},
+        {"path": "src/types.ts"},
+    ]
+
+    query = """
+        UNWIND $batch AS item
+        MERGE (f:File {path: item.path})
+        RETURN count(f) AS created
+    """
+
+    result = client.run_batch(query, files_data)
+    print(f"Created {result[0]['created']} files")
+
+    # Transaction support
+    def create_nodes(tx):
+        tx.run("CREATE (f:File {path: $path})", path="src/new.ts")
+        tx.run("CREATE (f:File {path: $path})", path="src/another.ts")
+
+    client.with_transaction(create_nodes)
+```
+
+### ExecutionRunner — Run Shell Commands
+
+```python
+from aica.execution.runner import ExecutionRunner
+from aica.execution.terminal.runner import run_command
+
+# Simple execution
+runner = ExecutionRunner()
+result = runner.run("echo 'Hello World'")
+
+if result.success:
+    print(f"Output: {result.stdout}")
+else:
+    print(f"Error: {result.stderr}")
+    print(f"Exit code: {result.returncode}")
+
+# With working directory
+result = runner.run("npm test", cwd="/path/to/project")
+
+# Convenience function with timeout
+result = run_command("pytest tests/ -v", timeout=300, cwd="/path/to/project")
+print(f"Tests {'passed' if result.success else 'failed'}")
+```
+
+### Orchestrator — Register and Run Agents
+
+```python
+from aica.core.orchestrator import Orchestrator
+from aica.core.agent import BaseAgent
+
+# Define custom agent
+class CodeReviewAgent(BaseAgent):
+    name = "code-review"
+    description = "Review code for best practices"
+
+    def run(self, task: str) -> str:
+        return f"Reviewed: {task}\n✓ No issues found"
+
+# Register and use
+orchestrator = Orchestrator()
+orchestrator.register(CodeReviewAgent())
+
+result = orchestrator.run("code-review", "Check src/app.ts for security issues")
+print(result)
+
+# List available agents
+print("Available agents:", orchestrator.agents)
+```
+
+### TaskPlanner — Generate Execution Plans
+
+```python
+from aica.core.planner import TaskPlanner
+
+planner = TaskPlanner()
+plan = planner.plan("Add pagination to the user list API endpoint")
+
+print(f"Task: {plan['task']}")
+print(f"Status: {plan['status']}")
+print("\nSteps:")
+for step in plan['steps']:
+    print(f"  {step['step']}. {step['name']}: {step['description']}")
+```
+
+### Memory Store — Use In-Memory Storage
+
+```python
+from aica.memory.store import InMemoryStore
+
+store = InMemoryStore()
+
+# Store data
+store.set("user:123", {"name": "Alice", "role": "admin"})
+store.set("cache:result", [1, 2, 3, 4, 5])
+
+# Retrieve data
+user = store.get("user:123")
+print(f"User: {user['name']}")
+
+# List keys
+print(f"All keys: {store.keys()}")
+
+# Delete and clear
+store.delete("cache:result")
+store.clear()
+```
+
+### Logging — Use Structured Logging
+
+```python
+from aica.core.logging.logger import get_logger
+
+log = get_logger("mymodule.myfeature")
+
+# Log with context
+log.info("processing_started", file="src/app.ts", lines=1234)
+
+# Log errors
+try:
+    raise ValueError("Invalid configuration")
+except Exception as e:
+    log.error("processing_failed", error=str(e), file="src/app.ts")
+
+# Log with structured data
+log.debug(
+    "function_analyzed",
+    name="getData",
+    params=["id", "options"],
+    async_=True,
+    line=42
+)
+```
+
+---
+
+## Next Steps
+
+- **[CLI Reference](cli.md)** — Command-line usage
+- **[Configuration Reference](configuration.md)** — Environment variables
+- **[Extending AICA](extending.md)** — Add custom agents, detectors, tools
+- **[Tutorials](tutorials.md)** — Step-by-step guides
+- **[Neo4j Graph Guide](neo4j-graph.md)** — Dependency graph queries

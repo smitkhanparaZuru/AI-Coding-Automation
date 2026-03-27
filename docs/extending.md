@@ -184,6 +184,292 @@ content = tool.execute(file_path="/projects/app/src/index.ts")
 
 ---
 
+## Adding a new Scanner Detector
+
+AICA's repository scanner uses a pluggable detector pattern. Each detector analyzes one aspect of the codebase (routes, components, stores, etc.). To add a new detector:
+
+### Step 1: Create the Detector
+
+Subclass the implicit detector interface and implement the `detect()` method:
+
+```python
+# aica/repo_intelligence/scanner/detectors/graphql.py
+from pathlib import Path
+from aica.core.logging.logger import get_logger
+
+log = get_logger("repo.detector.graphql")
+
+class GraphQLDetector:
+    """Detects GraphQL schema files and resolvers."""
+
+    def detect(self, repo_path: Path) -> dict:
+        """Scan for GraphQL schemas (.graphql, .gql) and resolvers.
+
+        Returns:
+            {
+                "schemas": [{"name": str, "file": str, "types": int}],
+                "resolvers": [{"name": str, "file": str, "operations": list[str]}]
+            }
+        """
+        log.info("graphql.detection.started", repo_path=str(repo_path))
+
+        schemas = []
+        resolvers = []
+
+        # Look for schema files
+        schema_patterns = ["**/*.graphql", "**/*.gql"]
+        for pattern in schema_patterns:
+            for schema_file in repo_path.glob(pattern):
+                # Skip excluded dirs
+                if self._should_exclude(schema_file):
+                    continue
+
+                # Parse schema (basic detection)
+                content = schema_file.read_text()
+                type_count = content.count("type ") + content.count("interface ")
+
+                schemas.append({
+                    "name": schema_file.stem,
+                    "file": str(schema_file.relative_to(repo_path)).replace("\\", "/"),
+                    "types": type_count,
+                })
+
+        # Look for resolvers (conventionally in src/resolvers/ or src/graphql/)
+        resolver_dirs = [
+            repo_path / "src" / "resolvers",
+            repo_path / "resolvers",
+            repo_path / "src" / "graphql" / "resolvers",
+        ]
+
+        for resolver_dir in resolver_dirs:
+            if not resolver_dir.is_dir():
+                continue
+
+            for resolver_file in resolver_dir.glob("**/*.ts"):
+                content = resolver_file.read_text()
+
+                # Detect exported resolver functions/objects
+                operations = []
+                if "Query:" in content:
+                    operations.append("Query")
+                if "Mutation:" in content:
+                    operations.append("Mutation")
+                if "Subscription:" in content:
+                    operations.append("Subscription")
+
+                if operations:
+                    resolvers.append({
+                        "name": resolver_file.stem,
+                        "file": str(resolver_file.relative_to(repo_path)).replace("\\", "/"),
+                        "operations": operations,
+                    })
+
+        log.info(
+            "graphql.detection.completed",
+            schemas_count=len(schemas),
+            resolvers_count=len(resolvers),
+        )
+
+        return {
+            "schemas": schemas,
+            "resolvers": resolvers,
+        }
+
+    def _should_exclude(self, path: Path) -> bool:
+        """Check if path should be excluded from scanning."""
+        excluded = {"node_modules", ".next", "dist", "build", "out", ".git"}
+        return any(part in excluded for part in path.parts)
+```
+
+### Step 2: Register in RepositoryScanner
+
+Add your detector to `RepositoryScanner` in `aica/repo_intelligence/scanner/core.py`:
+
+```python
+# aica/repo_intelligence/scanner/core.py
+from aica.repo_intelligence.scanner.detectors.graphql import GraphQLDetector
+
+class RepositoryScanner:
+    def __init__(self) -> None:
+        self._detectors = {
+            "framework": FrameworkDetector(),
+            "structure": StructureDetector(),
+            # ... existing detectors ...
+            "graphql": GraphQLDetector(),  # <- Add your detector
+        }
+
+    def scan(self, repo_path: Path) -> dict:
+        result = {"repo_path": str(repo_path.resolve())}
+
+        for name, detector in self._detectors.items():
+            log.info(f"scanner.detector.{name}.started")
+            detector_result = detector.detect(repo_path)
+
+            if name == "graphql":
+                result["graphql"] = detector_result  # Merge into top-level
+            else:
+                result.update(detector_result)  # Or merge keys directly
+
+            log.info(f"scanner.detector.{name}.completed")
+
+        return result
+```
+
+### Step 3: Update OutputWriter
+
+Write your detector results to a dedicated JSON file:
+
+```python
+# In aica/interfaces/cli.py, scan_repo command
+
+# After running scanner
+scan_data = scanner.scan(target)
+
+# Write all outputs including new detector
+if "graphql" in scan_data:
+    writer.write(scan_data["graphql"], target, "graphql.json")
+```
+
+### Step 4: Add Tests
+
+Create comprehensive tests in `tests/test_graphql_detector.py`:
+
+```python
+import pytest
+from pathlib import Path
+from aica.repo_intelligence.scanner.detectors.graphql import GraphQLDetector
+
+def test_detect_graphql_schemas(tmp_path: Path):
+    """Test detection of .graphql schema files."""
+    # Create test schema
+    schema_file = tmp_path / "schema.graphql"
+    schema_file.write_text("""
+        type User {
+            id: ID!
+            name: String!
+        }
+
+        type Query {
+            getUser(id: ID!): User
+        }
+    """)
+
+    detector = GraphQLDetector()
+    result = detector.detect(tmp_path)
+
+    assert len(result["schemas"]) == 1
+    assert result["schemas"][0]["name"] == "schema"
+    assert result["schemas"][0]["types"] == 2  # User + Query
+
+def test_detect_graphql_resolvers(tmp_path: Path):
+    """Test detection of resolver files."""
+    # Create resolver directory
+    resolvers_dir = tmp_path / "src" / "resolvers"
+    resolvers_dir.mkdir(parents=True)
+
+    # Create resolver file
+    resolver_file = resolvers_dir / "users.ts"
+    resolver_file.write_text("""
+        export const resolvers = {
+            Query: {
+                getUser: async (parent, { id }, context) => { ... }
+            },
+            Mutation: {
+                createUser: async (parent, { input }, context) => { ... }
+            }
+        };
+    """)
+
+    detector = GraphQLDetector()
+    result = detector.detect(tmp_path)
+
+    assert len(result["resolvers"]) == 1
+    assert result["resolvers"][0]["name"] == "users"
+    assert "Query" in result["resolvers"][0]["operations"]
+    assert "Mutation" in result["resolvers"][0]["operations"]
+
+def test_excludes_node_modules(tmp_path: Path):
+    """Test that node_modules is excluded from scanning."""
+    # Create schema in node_modules (should be ignored)
+    node_modules = tmp_path / "node_modules" / "some-package"
+    node_modules.mkdir(parents=True)
+    (node_modules / "schema.graphql").write_text("type Ignored { }")
+
+    detector = GraphQLDetector()
+    result = detector.detect(tmp_path)
+
+    assert len(result["schemas"]) == 0
+```
+
+Run tests:
+
+```bash
+pytest tests/test_graphql_detector.py -v
+```
+
+### Detector Design Guidelines
+
+1. **Output Schema**
+   - Return a dict or list of dicts
+   - Use consistent key names: `name`, `file`, `line`, `type`, etc.
+   - File paths should be POSIX-relative to repo root: `src/schema.graphql` not `src\\schema.graphql`
+
+2. **Performance**
+   - Avoid unnecessary file reads; use glob patterns efficiently
+   - Cache expensive operations if detector is called multiple times
+   - Log start/completion with counts
+
+3. **Exclusions**
+   - Always exclude: `node_modules`, `.next`, `dist`, `build`, `out`, `.git`, `.repo_intelligence`
+   - Use a helper method like `_should_exclude()` for consistency
+
+4. **Error Handling**
+   - Log warnings for parse errors but continue scanning
+   - Never raise exceptions for missing directories — return empty results
+   - Use try-except for file I/O, log errors, return partial results
+
+5. **Testing**
+   - Test with `tmp_path` fixtures (pytest)
+   - Cover: found items, excluded items, empty directories, malformed files
+   - Verify output schema matches documentation
+
+### Example: Minimal Detector
+
+```python
+# aica/repo_intelligence/scanner/detectors/docker.py
+from pathlib import Path
+
+class DockerDetector:
+    """Detects Docker configuration files."""
+
+    def detect(self, repo_path: Path) -> dict:
+        docker_files = []
+
+        # Look for Dockerfile variants
+        for dockerfile in repo_path.glob("**/Dockerfile*"):
+            if "node_modules" in dockerfile.parts:
+                continue
+
+            docker_files.append({
+                "name": dockerfile.name,
+                "file": str(dockerfile.relative_to(repo_path)).replace("\\", "/"),
+            })
+
+        # Look for docker-compose files
+        for compose_file in repo_path.glob("**/docker-compose*.{yml,yaml}"):
+            if "node_modules" in compose_file.parts:
+                continue
+
+            docker_files.append({
+                "name": compose_file.name,
+                "file": str(compose_file.relative_to(repo_path)).replace("\\", "/"),
+            })
+
+        return {"docker": docker_files}
+```
+
+---
+
 ## Swapping the Memory Backend
 
 The `InMemoryStore` is a dict-backed in-memory implementation suitable for development. For persistent memory (SQLite, Redis, etc.), subclass `MemoryStore`:

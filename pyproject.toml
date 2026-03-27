@@ -32,6 +32,7 @@ dependencies = [
     "tenacity>=8.3",
     "tree-sitter>=0.23",
     "tree-sitter-typescript>=0.23",
+    "neo4j>=5.0",
 ]
 
 [project.optional-dependencies]

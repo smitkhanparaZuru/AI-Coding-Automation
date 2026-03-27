@@ -154,7 +154,7 @@ aica status
 aica scan-repo --path /path/to/your/repo
 
 # Verbose Next.js App Router scan with rich tables
-aica scan-next --path /path/to/nextjs-repo
+aica scan-repo --path /path/to/nextjs-repo --verbose
 ```
 
 Outputs are written to `.repo_intelligence/` inside the target repo:
@@ -194,10 +194,25 @@ aica run-task "pytest tests/ -v" --cwd /path/to/project
 
 ## Documentation Pages
 
-| Page                              | Description                                               |
-| --------------------------------- | --------------------------------------------------------- |
-| [Installation](installation.md)   | Requirements, install options, `.env` setup               |
-| [Configuration](configuration.md) | Full `AICA_*` env var reference, provider setup           |
-| [CLI Reference](cli.md)           | All 8 commands with options, arguments, examples          |
-| [Developer Guide](extending.md)   | Extend with new agents, providers, tools, memory backends |
-| [API Reference](api-reference.md) | Public class and method signatures                        |
+### Getting Started
+
+| Page                              | Description                                          |
+| --------------------------------- | ---------------------------------------------------- |
+| [Installation](installation.md)   | Requirements, install options, `.env` setup          |
+| [Configuration](configuration.md) | Full `AICA_*` env var reference, provider setup      |
+| [Tutorials](tutorials.md)         | **NEW:** Quick Start (5 min), Deep Dive, Cloud Setup |
+
+### Reference
+
+| Page                                | Description                                            |
+| ----------------------------------- | ------------------------------------------------------ |
+| [CLI Reference](cli.md)             | All 8 commands with options, arguments, examples       |
+| [API Reference](api-reference.md)   | Public class and method signatures with usage examples |
+| [Neo4j Graph Guide](neo4j-graph.md) | **NEW:** Dependency graph schema, setup, queries       |
+
+### Advanced
+
+| Page                                  | Description                                         |
+| ------------------------------------- | --------------------------------------------------- |
+| [Developer Guide](extending.md)       | Extend with new agents, providers, tools, detectors |
+| [Troubleshooting](troubleshooting.md) | **NEW:** Common issues and solutions                |

@@ -58,14 +58,42 @@ All AICA settings are controlled via environment variables with the `AICA_` pref
 
 ---
 
-## Database Settings (Future Use)
+## Database Settings
+
+### Neo4j Graph Database
+
+| Variable              | Type        | Default                   | Description                                  |
+| --------------------- | ----------- | ------------------------- | -------------------------------------------- |
+| `AICA_NEO4J_URI`      | `str`       | `"bolt://localhost:7687"` | Neo4j connection URI (bolt:// or neo4j+s://) |
+| `AICA_NEO4J_USER`     | `str`       | `"neo4j"`                 | Neo4j username                               |
+| `AICA_NEO4J_PASSWORD` | `SecretStr` | `""`                      | Neo4j password — never logged                |
+| `AICA_NEO4J_DATABASE` | `str`       | `"neo4j"`                 | Target database name (default for single-DB) |
+
+**Local Docker setup:**
+
+```bash
+docker run --rm -it \
+  -p 7474:7474 -p 7687:7687 \
+  -e NEO4J_AUTH=neo4j/secret_password \
+  neo4j:latest
+```
+
+**Configuration:**
+
+```env
+AICA_NEO4J_URI=bolt://localhost:7687
+AICA_NEO4J_USER=neo4j
+AICA_NEO4J_PASSWORD=secret_password
+AICA_NEO4J_DATABASE=neo4j
+```
+
+### Vector Database (Future Use)
 
 | Variable             | Type  | Default                   | Description                  |
 | -------------------- | ----- | ------------------------- | ---------------------------- |
 | `AICA_VECTOR_DB_URL` | `str` | `"http://localhost:8000"` | ChromaDB vector database URL |
-| `AICA_GRAPH_DB_URL`  | `str` | `"bolt://localhost:7687"` | Neo4j graph database URL     |
 
-These are reserved for Phase 2 vector memory integration.
+Reserved for Phase 2 vector memory integration.
 
 ---
 

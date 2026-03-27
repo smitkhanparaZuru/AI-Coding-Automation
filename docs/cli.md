@@ -1,6 +1,6 @@
 # CLI Reference
 
-AICA provides 7 commands via the `aica` entry point.
+AICA provides 8 commands via the `aica` entry point.
 
 ```bash
 aica --help
@@ -157,6 +157,71 @@ aica summarize-repo [--path PATH]
 
 ```bash
 aica summarize-repo --path /projects/my-app
+```
+
+---
+
+### `aica build-graph`
+
+Build a Neo4j dependency graph from AST and scanner artifacts. This command loads all AST JSONs (imports, functions, calls, hooks, components, types) and scanner JSONs (routes, services, stores) from `.repo_intelligence/` and writes them into a Neo4j graph database.
+
+```bash
+aica build-graph [--path PATH]
+```
+
+**Options:**
+
+| Option   | Type   | Default           | Description                                                |
+| -------- | ------ | ----------------- | ---------------------------------------------------------- |
+| `--path` | `Path` | current directory | Repository root containing `.repo_intelligence/` artifacts |
+
+**Prerequisites:**
+
+1. Neo4j database running (Docker, Desktop, or Aura)
+2. Connection configured via env vars: `AICA_NEO4J_URI`, `AICA_NEO4J_USER`, `AICA_NEO4J_PASSWORD`
+3. Artifacts generated: `aica scan-repo` and `aica index-code` must be run first
+
+**Graph Schema:**
+
+| Node Types | Description                            |
+| ---------- | -------------------------------------- |
+| File       | Source files                           |
+| Function   | Functions, arrows, methods             |
+| Component  | React components                       |
+| Hook       | React hooks (custom + built-in)        |
+| Type       | TypeScript interfaces and type aliases |
+| Module     | External npm modules                   |
+| Route      | Next.js routes                         |
+| Service    | Service modules                        |
+| Store      | Zustand stores                         |
+
+| Relationship Types | Description                            |
+| ------------------ | -------------------------------------- |
+| IMPORTS            | File imports another file or module    |
+| DEFINES            | File defines a function/component/type |
+| CALLS              | Function calls another function        |
+| USES_HOOK          | Function/Component uses a React hook   |
+| HAS_ROUTE          | File defines a route                   |
+| HAS_STORE          | Directory contains a Zustand store     |
+| BELONGS_TO         | Service belongs to a file              |
+| EXPORTS            | File exports a symbol                  |
+
+**Output:** Displays a summary table with node counts (Files, Functions, Components, Types, Hooks, Routes, Services, Stores) and edge counts (Import Edges, Call Edges, Hook Usage Edges).
+
+**Note:** This command is **additive** — it adds to existing graph data. To start fresh, clear the database first via Neo4j Browser or Cypher:
+
+```cypher
+MATCH (n) DETACH DELETE n
+```
+
+**Examples:**
+
+```bash
+# Build graph for current directory
+aica build-graph
+
+# Build graph for a specific repository
+aica build-graph --path /projects/my-nextjs-app
 ```
 
 ---
