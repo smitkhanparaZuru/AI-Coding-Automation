@@ -44,7 +44,7 @@ See the full tutorials and examples in [docs/tutorials.md](docs/tutorials.md).
 - **Neo4j dependency graph** — build a queryable knowledge graph of your codebase with 9 node types (Files, Functions, Components, Hooks, Types, Modules, Routes, Services, Stores) and 8 relationship types (imports, calls, defines, uses, etc.)
 - **Execution runner** — safe subprocess wrapper (`ExecutionRunner`) with captured stdout/stderr and a `RunResult` return type
 - **Pluggable memory** — `MemoryStore` ABC with an in-memory implementation; swap for a persistent backend without touching agent code
-- **Extensible tool system** — grow automation capabilities by subclassing `BaseTool`
+- **Extensible tool system** — `BaseTool` ABC ready for custom tools (framework implemented, no built-in tools yet)
 - **Rich CLI** — nine commands with beautiful `rich` panels via `typer`
 - **Layered config** — env vars → `.env` file → defaults via Pydantic Settings v2; secrets masked in logs
 

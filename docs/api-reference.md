@@ -31,9 +31,19 @@ class Settings(BaseSettings):
     llm_retry_min_wait: float = 1.0
     llm_retry_max_wait: float = 10.0
 
-    # Database (future)
-    vector_db_url: str = "http://localhost:8000"
-    graph_db_url: str = "bolt://localhost:7687"
+    # Databases
+    vector_db_url: str = "http://localhost:8000"      # ChromaDB (future use)
+    graph_db_url: str = "bolt://localhost:7687"       # Neo4j (legacy)
+
+    # Neo4j
+    neo4j_uri: str = "bolt://localhost:7687"
+    neo4j_user: str = "neo4j"
+    neo4j_password: SecretStr = SecretStr("")
+    neo4j_database: str = "neo4j"
+
+    # Sync Behavior
+    sync_fallback_threshold: float = 0.20             # 0.0-1.0
+    sync_max_ast_age_seconds: int = 259200            # 3 days
 ```
 
 ### `get_settings() -> Settings`

@@ -97,6 +97,52 @@ Reserved for Phase 2 vector memory integration.
 
 ---
 
+## Sync Behavior
+
+These settings control incremental synchronization via the `sync-repo` command.
+
+| Variable                        | Type    | Default  | Constraint | Description                                                                                             |
+| ------------------------------- | ------- | -------- | ---------- | ------------------------------------------------------------------------------------------------------- |
+| `AICA_SYNC_FALLBACK_THRESHOLD`  | `float` | `0.20`   | 0.0 - 1.0  | Percentage of changed TypeScript/TSX files that triggers full rescan instead of incremental update      |
+| `AICA_SYNC_MAX_AST_AGE_SECONDS` | `int`   | `259200` | >= 0       | Maximum age (in seconds) for cached AST artifacts before forcing reanalysis (default: 3 days = 259200s) |
+
+**How incremental sync works:**
+
+1. **Detect changes**: Compare working directory against base ref (default: `HEAD`)
+2. **Calculate change ratio**: `changed_files / total_ts_tsx_files`
+3. **Decide strategy**:
+   - If ratio ≤ threshold → incremental update (fast)
+   - If ratio > threshold → full rescan (more accurate)
+4. **Check AST staleness**: If AST artifacts are older than `sync_max_ast_age_seconds`, force graph rebuild
+
+**Examples:**
+
+```env
+# More aggressive incremental updates (fallback at 15% changed files)
+AICA_SYNC_FALLBACK_THRESHOLD=0.15
+
+# Disable AST age check (always trust cached AST data)
+AICA_SYNC_MAX_AST_AGE_SECONDS=0
+
+# More frequent AST invalidation (1 day = 86400 seconds)
+AICA_SYNC_MAX_AST_AGE_SECONDS=86400
+```
+
+**Command-line overrides:**
+
+```bash
+# Force full rescan regardless of change ratio
+aica sync-repo --full
+
+# Override threshold for this run only
+aica sync-repo --threshold 0.10
+
+# Use different base ref (e.g., compare against main branch)
+aica sync-repo --base main
+```
+
+---
+
 ## Nested delimiter
 
 Pydantic Settings v2 supports `__` as a delimiter for nested settings groups. For example:
