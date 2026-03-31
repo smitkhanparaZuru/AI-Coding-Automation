@@ -12,11 +12,15 @@ A local, CLI-first AI coding automation engine built on Python 3.11+. AICA orche
 # 1. Install AICA
 pip install -e ".[dev]"
 
-# 2. Start Neo4j (for dependency graph)
+# 2. Start services (Neo4j for graph, Qdrant for embeddings)
 docker run --rm -d --name aica-neo4j \
   -p 7474:7474 -p 7687:7687 \
   -e NEO4J_AUTH=neo4j/password \
   neo4j:latest
+
+docker run --rm -d --name aica-qdrant \
+  -p 6333:6333 -p 6334:6334 \
+  qdrant/qdrant
 
 # 3. Configure AICA
 cp .env.example .env
@@ -28,7 +32,14 @@ aica scan-repo --verbose       # Scan codebase structure
 aica index-code                # Extract TypeScript AST
 aica build-graph               # Build Neo4j dependency graph
 
-# 5. Query the graph
+# 5. Index embeddings for semantic search
+aica index-embeddings          # Generate code embeddings
+
+# 6. Search your code semantically
+aica search-code "authentication logic"
+aica search-code "React hooks for data fetching" --type component
+
+# 7. Query the graph
 # Open http://localhost:7474 and run Cypher queries
 ```
 
@@ -42,10 +53,11 @@ See the full tutorials and examples in [docs/tutorials.md](docs/tutorials.md).
 - **Task planner** — `TaskPlanner` generates structured multi-step execution plans (LLM-driven in Phase 2)
 - **Repo intelligence** — 17 detectors deep-scan Next.js repos (routes, stores, tRPC, i18n, auth, env vars, and more); 7 TypeScript AST extractors (functions, imports, exports, calls, hooks, components, types) via tree-sitter
 - **Neo4j dependency graph** — build a queryable knowledge graph of your codebase with 9 node types (Files, Functions, Components, Hooks, Types, Modules, Routes, Services, Stores) and 8 relationship types (imports, calls, defines, uses, etc.)
+- **Semantic code search** — vector embeddings with Qdrant for finding code by intent; search with natural language queries and filters (file pattern, type, exported only)
 - **Execution runner** — safe subprocess wrapper (`ExecutionRunner`) with captured stdout/stderr and a `RunResult` return type
 - **Pluggable memory** — `MemoryStore` ABC with an in-memory implementation; swap for a persistent backend without touching agent code
 - **Extensible tool system** — `BaseTool` ABC ready for custom tools (framework implemented, no built-in tools yet)
-- **Rich CLI** — nine commands with beautiful `rich` panels via `typer`
+- **Rich CLI** — 13 commands with beautiful `rich` panels via `typer`
 - **Layered config** — env vars → `.env` file → defaults via Pydantic Settings v2; secrets masked in logs
 
 ## Requirements
@@ -128,19 +140,23 @@ AICA_OPENROUTER_MODEL=openai/gpt-4o-mini
 aica --help
 ```
 
-**Nine commands** for repo analysis, code indexing, graph building, and task automation:
+**Thirteen commands** for repo analysis, code indexing, graph building, semantic search, and task automation:
 
-| Command          | Description                                                                   |
-| ---------------- | ----------------------------------------------------------------------------- |
-| `status`         | Display current configuration and loaded modules                              |
-| `version`        | Print the installed AICA version                                              |
-| `scan-repo`      | Deep-scan a repo, write all 16 intelligence JSON files, and display a summary |
-| `index-code`     | Run TypeScript/TSX AST analysis and write to `.repo_intelligence/ast/`        |
-| `sync-repo`      | Incrementally sync changed files and update scanner/AST/graph artifacts       |
-| `summarize-repo` | Regenerate `repo_summary.json` from existing `.repo_intelligence/` artifacts  |
-| `build-graph`    | Build a Neo4j dependency graph from scanner + AST artifacts                   |
-| `plan-task`      | Generate a structured multi-step execution plan for a task                    |
-| `run-task`       | Execute a shell command and display captured stdout / stderr                  |
+| Command            | Description                                                                   |
+| ------------------ | ----------------------------------------------------------------------------- |
+| `status`           | Display current configuration and loaded modules                              |
+| `version`          | Print the installed AICA version                                              |
+| `scan-repo`        | Deep-scan a repo, write all 16 intelligence JSON files, and display a summary |
+| `index-code`       | Run TypeScript/TSX AST analysis and write to `.repo_intelligence/ast/`        |
+| `sync-repo`        | Incrementally sync changed files and update scanner/AST/graph artifacts       |
+| `summarize-repo`   | Regenerate `repo_summary.json` from existing `.repo_intelligence/` artifacts  |
+| `build-graph`      | Build a Neo4j dependency graph from scanner + AST artifacts                   |
+| `index-embeddings` | Generate vector embeddings for semantic code search from AST artifacts        |
+| `search-code`      | Search codebase semantically using natural language queries                   |
+| `embedding-status` | Display current embedding index status and statistics                         |
+| `clear-embeddings` | Delete all embeddings from the vector store                                   |
+| `plan-task`        | Generate a structured multi-step execution plan for a task                    |
+| `run-task`         | Execute a shell command and display captured stdout / stderr                  |
 
 ### Examples
 

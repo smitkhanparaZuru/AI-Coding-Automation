@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from pathlib import Path
 from typing import Annotated
@@ -6,6 +6,7 @@ from typing import Annotated
 import typer
 from rich.console import Console
 from rich.panel import Panel
+from rich.syntax import Syntax
 from rich.table import Table
 
 from aica.__about__ import __version__
@@ -13,8 +14,25 @@ from aica.config import get_settings
 from aica.core import TaskPlanner
 from aica.core.logging import get_logger, setup_logging
 from aica.execution import ExecutionRunner
-from aica.memory.graph_store.neo4j_client import GraphAuthError, GraphConnectionError, GraphQueryError
 from aica.memory.graph_store.graph_builder import build_dependency_graph
+from aica.memory.graph_store.neo4j_client import (
+    GraphAuthError,
+    GraphConnectionError,
+    GraphQueryError,
+)
+from aica.memory.vector_store.exceptions import (
+    VectorStoreAuthError,
+    VectorStoreConnectionError,
+    VectorStoreError,
+)
+from aica.memory.vector_store.indexing_pipeline import index_codebase
+from aica.memory.vector_store.qdrant_client import QdrantClient
+from aica.memory.vector_store.retriever import (
+    SearchQuery,
+    build_context_from_results,
+    format_search_results,
+    search_code,
+)
 from aica.repo_intelligence.ast.extractors import build_call_graph
 from aica.repo_intelligence.ast.runner import ASTExtractorRunner
 from aica.repo_intelligence.ast.writer import ASTWriter
@@ -84,7 +102,6 @@ def version() -> None:
 
 def _render_verbose_tables(data: dict, console: Console) -> None:
     """Render per-entity rich tables to the console for the --verbose scan output."""
-    # Framework info panel
     fw_table = Table(show_header=True, header_style="bold cyan", box=None, padding=(0, 2))
     fw_table.add_column("Property", style="dim", min_width=20)
     fw_table.add_column("Value")
@@ -95,7 +112,6 @@ def _render_verbose_tables(data: dict, console: Console) -> None:
     fw_table.add_row("Package Manager", data.get("package_manager", "unknown"))
     console.print(Panel(fw_table, title="[bold]Framework[/bold]", border_style="cyan"))
 
-    # Source structure table
     src_structure: dict = data.get("src_structure", {})
     if src_structure:
         src_table = Table(show_header=True, header_style="bold cyan", box=None, padding=(0, 2))
@@ -105,7 +121,6 @@ def _render_verbose_tables(data: dict, console: Console) -> None:
             src_table.add_row(dir_name, rel_path)
         console.print(Panel(src_table, title="[bold]Source Structure[/bold]", border_style="cyan"))
 
-    # Config files table
     config_files: dict = data.get("config_files", {})
     if config_files:
         cfg_table = Table(show_header=True, header_style="bold cyan", box=None, padding=(0, 2))
@@ -116,7 +131,6 @@ def _render_verbose_tables(data: dict, console: Console) -> None:
             cfg_table.add_row(key, display)
         console.print(Panel(cfg_table, title="[bold]Config Files[/bold]", border_style="cyan"))
 
-    # Routes table
     routes: list = data.get("routes", [])
     if routes:
         routes_table = Table(show_header=True, header_style="bold cyan", box=None, padding=(0, 2))
@@ -129,7 +143,6 @@ def _render_verbose_tables(data: dict, console: Console) -> None:
             routes_table.add_row(entry["route"], entry["type"], methods_str, entry["file"])
         console.print(Panel(routes_table, title="[bold]Routes[/bold]", border_style="cyan"))
 
-    # Components table
     components: list = data.get("components", [])
     if components:
         comp_table = Table(show_header=True, header_style="bold cyan", box=None, padding=(0, 2))
@@ -141,7 +154,6 @@ def _render_verbose_tables(data: dict, console: Console) -> None:
             comp_table.add_row(entry["name"], entry["file"], props_str)
         console.print(Panel(comp_table, title="[bold]Components[/bold]", border_style="cyan"))
 
-    # Services table
     services: list = data.get("services", [])
     if services:
         svc_table = Table(show_header=True, header_style="bold cyan", box=None, padding=(0, 2))
@@ -153,7 +165,6 @@ def _render_verbose_tables(data: dict, console: Console) -> None:
             svc_table.add_row(entry["service"], entry["file"], fns_str)
         console.print(Panel(svc_table, title="[bold]Services[/bold]", border_style="cyan"))
 
-    # Database table
     database: list = data.get("database", [])
     if database:
         db_table = Table(show_header=True, header_style="bold cyan", box=None, padding=(0, 2))
@@ -165,7 +176,6 @@ def _render_verbose_tables(data: dict, console: Console) -> None:
             db_table.add_row(entry["orm"], entry.get("schema") or "—", models_str)
         console.print(Panel(db_table, title="[bold]Database[/bold]", border_style="cyan"))
 
-    # Packages table
     packages: dict = data.get("packages", {})
     pkg_table = Table(show_header=True, header_style="bold cyan", box=None, padding=(0, 2))
     pkg_table.add_column("Category", style="dim", min_width=16)
@@ -187,7 +197,6 @@ def _render_verbose_tables(data: dict, console: Console) -> None:
         pkg_table.add_row(category, ", ".join(items) if items else "—")
     console.print(Panel(pkg_table, title="[bold]Packages[/bold]", border_style="cyan"))
 
-    # Zustand stores table
     stores: list = data.get("stores", [])
     if stores:
         stores_table = Table(show_header=True, header_style="bold cyan", box=None, padding=(0, 2))
@@ -200,7 +209,6 @@ def _render_verbose_tables(data: dict, console: Console) -> None:
             stores_table.add_row(entry["store"], slices_str, mw_str)
         console.print(Panel(stores_table, title="[bold]Zustand Stores[/bold]", border_style="cyan"))
 
-    # tRPC routers table
     trpc_routers: list = data.get("trpc_routers", [])
     if trpc_routers:
         trpc_table = Table(show_header=True, header_style="bold cyan", box=None, padding=(0, 2))
@@ -212,7 +220,6 @@ def _render_verbose_tables(data: dict, console: Console) -> None:
             trpc_table.add_row(entry["tier"], entry["router"], procs_str)
         console.print(Panel(trpc_table, title="[bold]tRPC Routers[/bold]", border_style="cyan"))
 
-    # i18n table
     i18n: dict = data.get("i18n", {})
     if i18n.get("source_lang") or i18n.get("namespaces"):
         i18n_table = Table(show_header=True, header_style="bold cyan", box=None, padding=(0, 2))
@@ -225,7 +232,6 @@ def _render_verbose_tables(data: dict, console: Console) -> None:
         i18n_table.add_row("Namespaces", ", ".join(i18n.get("namespaces", [])) or "—")
         console.print(Panel(i18n_table, title="[bold]i18n[/bold]", border_style="cyan"))
 
-    # Auth table
     auth: dict = data.get("auth", {})
     if auth.get("providers") or auth.get("config_file"):
         auth_table = Table(show_header=True, header_style="bold cyan", box=None, padding=(0, 2))
@@ -238,7 +244,6 @@ def _render_verbose_tables(data: dict, console: Console) -> None:
         auth_table.add_row("Config file", auth.get("config_file") or "—")
         console.print(Panel(auth_table, title="[bold]Auth[/bold]", border_style="cyan"))
 
-    # Server modules table
     server_modules: list = data.get("server_modules", [])
     if server_modules:
         sm_table = Table(show_header=True, header_style="bold cyan", box=None, padding=(0, 2))
@@ -251,7 +256,6 @@ def _render_verbose_tables(data: dict, console: Console) -> None:
             sm_table.add_row(entry["module"], files_str, exports_str)
         console.print(Panel(sm_table, title="[bold]Server Modules[/bold]", border_style="cyan"))
 
-    # Agent runtime / LLM providers table
     agent_runtime: dict = data.get("agent_runtime", {})
     llm_providers: list = agent_runtime.get("llm_providers", [])
     sso_providers_list: list = agent_runtime.get("sso_providers", [])
@@ -267,7 +271,6 @@ def _render_verbose_tables(data: dict, console: Console) -> None:
         ar_table.add_row("SSO providers", ", ".join(sso_providers_list) or "—")
         console.print(Panel(ar_table, title="[bold]Agent Runtime[/bold]", border_style="cyan"))
 
-    # Env vars table
     env_vars: dict = data.get("env_vars", {})
     if env_vars.get("total"):
         ev_table = Table(show_header=True, header_style="bold cyan", box=None, padding=(0, 2))
@@ -279,7 +282,6 @@ def _render_verbose_tables(data: dict, console: Console) -> None:
             ev_table.add_row(category, str(len(var_list)), sample)
         console.print(Panel(ev_table, title="[bold]Env Vars[/bold]", border_style="cyan"))
 
-    # Hooks table
     hooks: list = data.get("hooks", [])
     if hooks:
         hooks_table = Table(show_header=True, header_style="bold cyan", box=None, padding=(0, 2))
@@ -291,7 +293,6 @@ def _render_verbose_tables(data: dict, console: Console) -> None:
             hooks_table.add_row(entry["name"], entry["file"], params_str)
         console.print(Panel(hooks_table, title="[bold]Custom Hooks[/bold]", border_style="cyan"))
 
-    # Scripts table
     scripts: list = data.get("scripts", [])
     if scripts:
         sc_table = Table(show_header=True, header_style="bold cyan", box=None, padding=(0, 2))
@@ -303,7 +304,6 @@ def _render_verbose_tables(data: dict, console: Console) -> None:
             sc_table.add_row(entry["name"], entry["type"], files_str)
         console.print(Panel(sc_table, title="[bold]Scripts[/bold]", border_style="cyan"))
 
-    # Libs table
     libs: list = data.get("libs", [])
     if libs:
         libs_table = Table(show_header=True, header_style="bold cyan", box=None, padding=(0, 2))
@@ -707,8 +707,14 @@ def build_graph(
 
     # Calculated totals
     total_nodes = (
-        summary.files + summary.functions + summary.components + summary.types +
-        summary.hooks + summary.routes + summary.services + summary.stores
+        summary.files
+        + summary.functions
+        + summary.components
+        + summary.types
+        + summary.hooks
+        + summary.routes
+        + summary.services
+        + summary.stores
     )
     results_table.add_row("[bold]Total Nodes[/bold]", f"[bold]{total_nodes}[/bold]")
 
@@ -744,9 +750,7 @@ def plan_task(
     log.info("cli.plan_task.invoked", task=task)
     result = TaskPlanner().plan(task)
 
-    steps_text = "\n".join(
-        f"  {i + 1}. {step}" for i, step in enumerate(result["steps"])
-    )
+    steps_text = "\n".join(f"  {i + 1}. {step}" for i, step in enumerate(result["steps"]))
     content = (
         f"[bold]Task:[/bold]   {result['task']}\n"
         f"[bold]Status:[/bold] {result['status']}\n\n"
@@ -784,6 +788,345 @@ def run_task(
         console.print(Panel(result.stderr, title="[bold]stderr[/bold]", border_style="yellow"))
 
 
+@app.command(name="index-embeddings")
+def index_embeddings(
+    path: Annotated[
+        Path | None,
+        typer.Option("--path", help="Path to the repository to index."),
+    ] = None,
+    force: Annotated[
+        bool,
+        typer.Option("--force", help="Force reindex (delete and recreate collection)."),
+    ] = False,
+) -> None:
+    """Generate code embeddings and store in Qdrant vector database.
+
+    This command:
+    1. Loads AST artifacts from .repo_intelligence/ast/
+    2. Creates semantic code chunks
+    3. Generates embeddings using configured provider
+    4. Stores vectors in Qdrant collection
+
+    Requires Qdrant to be running (default: http://localhost:6333)
+    Set embedding provider via AICA_EMBEDDING_PROVIDER (ollama|openrouter)
+
+    Examples:
+        aica index-embeddings
+        aica index-embeddings --force
+        aica index-embeddings --path /path/to/repo
+    """
+    settings = get_settings()
+    target = (path or settings.workspace_dir).resolve()
+    log.info("cli.index_embeddings.start", path=str(target), force=force)
+
+    # Validation: Check AST artifacts exist
+    artifact_dir = target / ".repo_intelligence" / "ast"
+    if not artifact_dir.is_dir():
+        console.print(
+            f"[red]Error:[/red] No .repo_intelligence/ast/ directory found at {target}.\n"
+            "Run [bold]aica index-code[/bold] first to generate AST files."
+        )
+        raise typer.Exit(code=1)
+
+    # Execute indexing pipeline
+    try:
+        summary = index_codebase(target, force_reindex=force)
+    except VectorStoreConnectionError as exc:
+        console.print(
+            "[red]Qdrant connection failed:[/red] "
+            f"{exc}\nEnsure Qdrant is running at {settings.qdrant_url}"
+        )
+        raise typer.Exit(code=1) from exc
+    except VectorStoreAuthError as exc:
+        console.print(f"[red]Qdrant authentication failed:[/red] {exc}\nCheck AICA_QDRANT_API_KEY.")
+        raise typer.Exit(code=1) from exc
+    except VectorStoreError as exc:
+        console.print(f"[red]Embedding error:[/red] {exc}")
+        raise typer.Exit(code=1) from exc
+
+    # Display results
+    table = Table(show_header=True, header_style="bold cyan", box=None, padding=(0, 2))
+    table.add_column("Metric", style="dim", min_width=25)
+    table.add_column("Value")
+    table.add_row("Total chunks", str(summary.total_chunks))
+    table.add_row("Embedded", str(summary.embedded))
+    table.add_row("Stored in Qdrant", str(summary.stored))
+    table.add_row("Skipped (exists)", str(summary.skipped))
+    table.add_row("Failed", str(summary.failed))
+    table.add_row("Duration", f"{summary.duration_seconds:.2f}s")
+
+    border_color = "cyan" if summary.failed == 0 else "yellow"
+    console.print(
+        Panel(table, title="[bold]Embedding Indexing Complete[/bold]", border_style=border_color)
+    )
+
+    if summary.errors:
+        console.print(f"[yellow]Errors ({len(summary.errors)}):[/yellow]")
+        for err in summary.errors[:5]:  # Show first 5
+            console.print(f"  [dim]{err}[/dim]")
+
+    log.info(
+        "cli.index_embeddings.done",
+        stored=summary.stored,
+        failed=summary.failed,
+        duration=round(summary.duration_seconds, 2),
+    )
+
+
+@app.command(name="search-code")
+def search_code_cmd(
+    query: Annotated[str, typer.Argument(help="Natural language search query.")],
+    path: Annotated[
+        Path | None,
+        typer.Option("--path", help="Path to the repository (for context)."),
+    ] = None,
+    limit: Annotated[
+        int,
+        typer.Option("--limit", "-n", help="Maximum number of results to return."),
+    ] = 10,
+    file_pattern: Annotated[
+        str | None,
+        typer.Option("--file", help="Filter by file glob pattern (e.g., 'src/**/*.ts')."),
+    ] = None,
+    chunk_type: Annotated[
+        str | None,
+        typer.Option("--type", help="Filter by chunk type (function|component|type)."),
+    ] = None,
+    exported_only: Annotated[
+        bool,
+        typer.Option("--exported", help="Only show exported entities."),
+    ] = False,
+    format_style: Annotated[
+        str,
+        typer.Option("--format", help="Output format (table|code|context)."),
+    ] = "table",
+) -> None:
+    """Search codebase using semantic similarity.
+
+    Examples:
+        aica search-code "authentication middleware"
+        aica search-code "React hooks for data fetching" --type function
+        aica search-code "API routes" --file "src/app/**" --exported
+        aica search-code "database queries" --format code --limit 3
+    """
+    settings = get_settings()
+    log.info("cli.search_code.start", query=query, limit=limit)
+
+    # Build filters
+    filters = {}
+    if file_pattern:
+        filters["file_pattern"] = file_pattern
+    if chunk_type:
+        filters["chunk_type"] = chunk_type
+    if exported_only:
+        filters["exported_only"] = True
+
+    # Execute search
+    try:
+        search_query = SearchQuery(text=query, top_k=limit, filters=filters)
+        response = search_code(search_query)
+    except VectorStoreConnectionError as exc:
+        console.print(
+            f"[red]Qdrant connection failed:[/red] {exc}\n"
+            f"Ensure Qdrant is running at {settings.qdrant_url}"
+        )
+        raise typer.Exit(code=1) from exc
+    except VectorStoreError as exc:
+        console.print(f"[red]Search error:[/red] {exc}")
+        raise typer.Exit(code=1) from exc
+
+    # Display results based on format
+    if not response.results:
+        console.print("[yellow]No results found.[/yellow]")
+        log.info("cli.search_code.done", results=0)
+        return
+
+    if format_style == "table":
+        format_search_results(response, console)
+    elif format_style == "code":
+        for i, result in enumerate(response.results, 1):
+            # Determine language from file extension
+            file_ext = (
+                result.chunk.metadata.file.split(".")[-1]
+                if "." in result.chunk.metadata.file
+                else "python"
+            )
+            lang_map = {
+                "ts": "typescript",
+                "tsx": "tsx",
+                "js": "javascript",
+                "jsx": "jsx",
+                "py": "python",
+            }
+            lang = lang_map.get(file_ext, "python")
+
+            syntax = Syntax(
+                result.chunk.text,
+                lang,
+                theme="monokai",
+                line_numbers=True,
+            )
+            metadata = result.chunk.metadata
+            title = (
+                f"[bold]{i}. {metadata.name}[/bold] "
+                f"[dim]({metadata.file}:{metadata.line})[/dim] "
+                f"[cyan]score: {result.adjusted_score:.3f}[/cyan]"
+            )
+            console.print(
+                Panel(
+                    syntax,
+                    title=title,
+                    border_style="cyan",
+                )
+            )
+    elif format_style == "context":
+        context = build_context_from_results(response)
+        console.print(context)
+    else:
+        console.print(
+            f"[red]Error:[/red] Unknown format '{format_style}'. Use: table, code, or context."
+        )
+        raise typer.Exit(code=1)
+
+    log.info(
+        "cli.search_code.done",
+        results=len(response.results),
+        duration=response.duration_ms,
+    )
+
+
+@app.command(name="embedding-status")
+def embedding_status(
+    path: Annotated[
+        Path | None,
+        typer.Option("--path", help="Path to the repository."),
+    ] = None,
+) -> None:
+    """Show embedding index status and statistics.
+
+    Displays:
+    - Collection existence and size
+    - Embedding provider configuration
+    - Qdrant connection health
+
+    Example:
+        aica embedding-status
+    """
+    settings = get_settings()
+    target = (path or settings.workspace_dir).resolve()
+    log.info("cli.embedding_status.start")
+
+    # Configuration table
+    config_table = Table(show_header=True, header_style="bold cyan", box=None, padding=(0, 2))
+    config_table.add_column("Setting", style="dim", min_width=25)
+    config_table.add_column("Value")
+    config_table.add_row("Qdrant URL", settings.qdrant_url)
+    config_table.add_row("Collection", settings.qdrant_collection_name)
+    config_table.add_row("Embedding Provider", settings.embedding_provider)
+    config_table.add_row("Embedding Model", settings.embedding_model)
+    config_table.add_row("Batch Size", str(settings.embedding_batch_size))
+    if settings.qdrant_vector_dimension:
+        config_table.add_row("Vector Dimension", str(settings.qdrant_vector_dimension))
+    console.print(Panel(config_table, title="[bold]Configuration[/bold]", border_style="cyan"))
+
+    # Get Qdrant client and collection info
+    try:
+        client = QdrantClient()
+        client.connect()
+        collection_exists = client.collection_exists()
+    except VectorStoreConnectionError as exc:
+        console.print(
+            f"[red]Qdrant connection failed:[/red] {exc}\n"
+            f"Ensure Qdrant is running at {settings.qdrant_url}"
+        )
+        raise typer.Exit(code=1) from exc
+    finally:
+        if "client" in locals():
+            client.close()
+
+    # Collection status table
+    status_table = Table(show_header=True, header_style="bold cyan", box=None, padding=(0, 2))
+    status_table.add_column("Metric", style="dim", min_width=25)
+    status_table.add_column("Value")
+
+    if collection_exists:
+        status_table.add_row("Collection Status", "[green]✓ Exists[/green]")
+        status_table.add_row("Action", 'Run [bold]aica search-code "query"[/bold] to search')
+    else:
+        status_table.add_row("Collection Status", "[yellow]⚠ Not Created[/yellow]")
+        status_table.add_row("Action", "Run [bold]aica index-embeddings[/bold] to create")
+
+    console.print(Panel(status_table, title="[bold]Index Status[/bold]", border_style="cyan"))
+    log.info("cli.embedding_status.done", exists=collection_exists)
+
+
+@app.command(name="clear-embeddings")
+def clear_embeddings(
+    path: Annotated[
+        Path | None,
+        typer.Option("--path", help="Path to the repository."),
+    ] = None,
+    force: Annotated[
+        bool,
+        typer.Option("--force", "-f", help="Skip confirmation prompt."),
+    ] = False,
+) -> None:
+    """Delete the embedding collection from Qdrant.
+
+    WARNING: This operation cannot be undone. All indexed embeddings will be deleted.
+    Use --force to skip confirmation prompt.
+
+    Examples:
+        aica clear-embeddings
+        aica clear-embeddings --force
+    """
+    settings = get_settings()
+    log.info("cli.clear_embeddings.start")
+
+    # Check if collection exists
+    try:
+        client = QdrantClient()
+        client.connect()
+        exists = client.collection_exists()
+    except VectorStoreConnectionError as exc:
+        console.print(
+            f"[red]Qdrant connection failed:[/red] {exc}\n"
+            f"Ensure Qdrant is running at {settings.qdrant_url}"
+        )
+        raise typer.Exit(code=1) from exc
+
+    if not exists:
+        console.print(
+            f"[yellow]Collection '{settings.qdrant_collection_name}' does not exist.[/yellow]"
+        )
+        client.close()
+        raise typer.Exit(code=0)
+
+    # Confirmation prompt (unless --force)
+    if not force:
+        confirm = typer.confirm(
+            f"Delete collection '{settings.qdrant_collection_name}'? This cannot be undone."
+        )
+        if not confirm:
+            console.print("[yellow]Deletion cancelled.[/yellow]")
+            client.close()
+            raise typer.Exit(code=0)
+
+    # Delete collection
+    try:
+        client.delete_collection()
+        client.close()
+    except VectorStoreError as exc:
+        console.print(f"[red]Error deleting collection:[/red] {exc}")
+        if "client" in locals():
+            client.close()
+        raise typer.Exit(code=1) from exc
+
+    console.print(
+        f"[green]✓ Collection '{settings.qdrant_collection_name}' deleted successfully.[/green]"
+    )
+    log.info("cli.clear_embeddings.done", collection=settings.qdrant_collection_name)
+
+
 if __name__ == "__main__":
     app()
-

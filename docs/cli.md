@@ -1,6 +1,6 @@
 # CLI Reference
 
-AICA provides 9 commands via the `aica` entry point.
+AICA provides 13 commands via the `aica` entry point.
 
 ```bash
 aica --help
@@ -387,6 +387,157 @@ aica run-task "pnpm run db:migrate" --cwd /projects/my-nextjs-app
 # Any shell command
 aica run-task "git log --oneline -10" --cwd /projects/my-repo
 ```
+
+---
+
+### `aica index-embeddings`
+
+Generate vector embeddings for semantic code search. Processes all TypeScript/TSX AST artifacts and indexes them in Qdrant for similarity search.
+
+```bash
+aica index-embeddings [--path PATH] [--force]
+```
+
+**Options:**
+
+| Option    | Type   | Default           | Description                                        |
+| --------- | ------ | ----------------- | -------------------------------------------------- |
+| `--path`  | `Path` | current directory | Path to the repository root                        |
+| `--force` | flag   | off               | Force re-indexing even if embeddings already exist |
+
+**Prerequisites:**
+
+- Qdrant running (Docker: `docker run -p 6333:6333 qdrant/qdrant`)
+- AST artifacts exist (run `aica index-code` first)
+- Embedding provider configured (OpenAI, Ollama, etc.)
+
+**Output:**
+
+- Progress bars for chunking and embedding
+- Statistics: files processed, chunks created, embeddings indexed
+- Success/failure status
+
+**Examples:**
+
+```bash
+# Index current repository
+aica index-embeddings
+
+# Force re-index
+aica index-embeddings --force
+
+# Index specific repository
+aica index-embeddings --path /path/to/repo
+```
+
+---
+
+### `aica search-code`
+
+Search your codebase semantically using natural language queries. Returns relevant code snippets ranked by similarity.
+
+```bash
+aica search-code QUERY [--type TYPE] [--file PATTERN] [--exported] [--format FORMAT] [--limit N]
+```
+
+**Arguments:**
+
+| Argument | Type  | Required | Description                   |
+| -------- | ----- | -------- | ----------------------------- |
+| `QUERY`  | `str` | yes      | Natural language search query |
+
+**Options:**
+
+| Option       | Type  | Default | Description                                             |
+| ------------ | ----- | ------- | ------------------------------------------------------- |
+| `--type`     | `str` | all     | Filter by type: `function`, `component`, `hook`, `type` |
+| `--file`     | `str` | all     | Filter by file pattern (glob): `src/app/**`             |
+| `--exported` | flag  | off     | Only search exported symbols                            |
+| `--format`   | `str` | `table` | Output format: `table`, `code`, `json`                  |
+| `--limit`    | `int` | `10`    | Maximum number of results to return                     |
+
+**Examples:**
+
+```bash
+# Basic semantic search
+aica search-code "authentication middleware"
+
+# Search for React hooks related to data fetching
+aica search-code "React hooks for data fetching" --type function
+
+# Find API routes in specific directory
+aica search-code "API routes" --file "src/app/**" --exported
+
+# Get code snippets for database queries
+aica search-code "database queries" --format code --limit 3
+```
+
+**Output formats:**
+
+- `table` — Rich table with file, symbol, type, score
+- `code` — Full code snippets with syntax highlighting
+- `json` — Machine-readable JSON array
+
+---
+
+### `aica embedding-status`
+
+Display current embedding index status and statistics.
+
+```bash
+aica embedding-status [--path PATH]
+```
+
+**Options:**
+
+| Option   | Type   | Default           | Description             |
+| -------- | ------ | ----------------- | ----------------------- |
+| `--path` | `Path` | current directory | Path to repository root |
+
+**Output:**
+
+- Qdrant connection status
+- Collection name and vector count
+- Indexed files count
+- Last indexed timestamp
+- Embedding model used
+- Next steps if not indexed
+
+**Examples:**
+
+```bash
+# Check status for current repository
+aica embedding-status
+```
+
+---
+
+### `aica clear-embeddings`
+
+Delete all embeddings from the vector store for the current repository.
+
+```bash
+aica clear-embeddings [--path PATH] [--force]
+```
+
+**Options:**
+
+| Option    | Type   | Default           | Description              |
+| --------- | ------ | ----------------- | ------------------------ |
+| `--path`  | `Path` | current directory | Path to repository root  |
+| `--force` | flag   | off               | Skip confirmation prompt |
+
+**Examples:**
+
+```bash
+# Clear with confirmation
+aica clear-embeddings
+
+# Clear without confirmation
+aica clear-embeddings --force
+```
+
+**Warning:** This action is irreversible. Re-index with `aica index-embeddings` to restore.
 
 ---
 

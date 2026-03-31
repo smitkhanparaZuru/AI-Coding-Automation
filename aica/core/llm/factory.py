@@ -53,8 +53,7 @@ class LLMProvider:
 
         if _provider not in _REGISTRY:
             raise ValueError(
-                f"Unknown LLM provider '{_provider}'. "
-                f"Registered providers: {sorted(_REGISTRY)}"
+                f"Unknown LLM provider '{_provider}'. Registered providers: {sorted(_REGISTRY)}"
             )
 
         common = {
@@ -71,9 +70,7 @@ class LLMProvider:
                 **common,
             )
         elif _provider == "openrouter":
-            api_key = (
-                cfg.openrouter_api_key.get_secret_value() if cfg.openrouter_api_key else ""
-            )
+            api_key = cfg.openrouter_api_key.get_secret_value() if cfg.openrouter_api_key else ""
             self._backend = OpenRouterProvider(
                 model=model or cfg.openrouter_model,
                 api_key=api_key,
@@ -91,10 +88,6 @@ class LLMProvider:
         """The underlying provider backend (read-only)."""
         return self._backend
 
-    # ------------------------------------------------------------------
-    # Sync
-    # ------------------------------------------------------------------
-
     def generate(self, prompt: str, **kwargs: object) -> str:
         """Return the complete model response for *prompt*."""
         return self._backend.generate(prompt, **kwargs)
@@ -102,10 +95,6 @@ class LLMProvider:
     def stream(self, prompt: str, **kwargs: object) -> Iterator[str]:
         """Yield response tokens for *prompt* as they arrive."""
         yield from self._backend.stream(prompt, **kwargs)
-
-    # ------------------------------------------------------------------
-    # Async
-    # ------------------------------------------------------------------
 
     async def async_generate(self, prompt: str, **kwargs: object) -> str:
         """Async variant of :meth:`generate`."""
@@ -115,10 +104,6 @@ class LLMProvider:
         """Async variant of :meth:`stream`."""
         async for chunk in self._backend.async_stream(prompt, **kwargs):
             yield chunk
-
-    # ------------------------------------------------------------------
-    # Extensibility
-    # ------------------------------------------------------------------
 
     @classmethod
     def register(cls, name: str, provider_cls: type[BaseLLMProvider]) -> None:

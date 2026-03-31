@@ -9,6 +9,7 @@ Step-by-step guides for common AICA workflows. Choose your path based on experie
 - [Tutorial 1: Quick Start (5 minutes)](#tutorial-1-quick-start-5-minutes)
 - [Tutorial 2: Deep Dive — Analyzing a Next.js App (20 minutes)](#tutorial-2-deep-dive--analyzing-a-nextjs-app-20-minutes)
 - [Tutorial 3: Cloud Setup — OpenRouter + Neo4j Aura (15 minutes)](#tutorial-3-cloud-setup--openrouter--neo4j-aura-15-minutes)
+- [Tutorial 4: Semantic Code Search with Embeddings (15 minutes)](#tutorial-4-semantic-code-search-with-embeddings-15-minutes)
 
 ---
 
@@ -677,6 +678,350 @@ Run in CI:
 - **Optimize queries:** Use indexes and query profiling (`PROFILE` prefix in Cypher)
 - **Scale up:** Upgrade Neo4j Aura tier for larger repos
 - **Automate:** Run AICA analysis on every PR and post results as comments
+
+---
+
+## Tutorial 4: Semantic Code Search with Embeddings (15 minutes)
+
+**Goal:** Index your codebase with vector embeddings and perform semantic code search to find relevant implementations by intent, not just keywords.
+
+**Prerequisites:**
+
+- Completed Tutorial 1 or 2 (AST artifacts exist)
+- Docker (for Qdrant)
+- Ollama running (or OpenRouter API key)
+
+---
+
+### Step 1: Start Qdrant Vector Database
+
+```bash
+docker run --rm -d \
+  --name aica-qdrant \
+  -p 6333:6333 -p 6334:6334 \
+  qdrant/qdrant
+```
+
+Verify Qdrant is running:
+
+```bash
+curl http://localhost:6333/health
+# {"title":"qdrant - vector search engine","version":"..."}
+```
+
+---
+
+### Step 2: Configure Embedding Provider
+
+**Option A: Ollama (Local, Free)**
+
+```bash
+# Pull embedding model
+ollama pull nomic-embed-text
+
+# Add to .env
+cat >> .env << EOF
+# Embedding configuration
+AICA_EMBEDDING_PROVIDER=ollama
+AICA_EMBEDDING_MODEL=nomic-embed-text
+AICA_QDRANT_URL=http://localhost:6333
+EOF
+```
+
+**Option B: OpenRouter (Cloud, Paid)**
+
+```bash
+# Add to .env
+cat >> .env << EOF
+# Embedding configuration
+AICA_EMBEDDING_PROVIDER=openrouter
+AICA_EMBEDDING_MODEL=openai/text-embedding-3-small
+AICA_EMBEDDING_OPENROUTER_API_KEY=sk-or-v1-your-key-here
+AICA_QDRANT_URL=http://localhost:6333
+EOF
+```
+
+---
+
+### Step 3: Generate Code Embeddings
+
+Navigate to your analyzed repository:
+
+```bash
+cd /path/to/your/nextjs-app
+
+# Index the codebase (generates embeddings for all functions, components, types)
+aica index-embeddings
+```
+
+**Expected output:**
+
+```
+╭─────────────────── Embedding Indexing Complete ────────────────────╮
+│ Metric             │ Value                                          │
+│ ────────────────── │ ────────────────────────────────────────────── │
+│ Total chunks       │ 847                                            │
+│ Embedded           │ 847                                            │
+│ Stored in Qdrant   │ 847                                            │
+│ Skipped (exists)   │ 0                                              │
+│ Failed             │ 0                                              │
+│ Duration           │ 28.43s                                         │
+╰────────────────────────────────────────────────────────────────────╯
+```
+
+**What happened:**
+
+- AST artifacts (functions.json, components.json, types.json) were chunked
+- Each code chunk was embedded using your configured model
+- Vectors were stored in Qdrant with rich metadata (file, line, type, exported status)
+
+---
+
+### Step 4: Semantic Search Basics
+
+**Search by intent** (not exact keywords):
+
+```bash
+# Find authentication-related code
+aica search-code "user login and authentication logic"
+```
+
+**Output:**
+
+```
+╭───────────────────────── Search Results ─────────────────────────╮
+│ Rank │ Name           │ File                      │ Score │ Line │
+│ ──── │ ────────────── │ ───────────────────────── │ ───── │ ──── │
+│ 1    │ loginUser      │ services/auth.service.ts  │ 0.912 │ 45   │
+│ 2    │ authenticate   │ middleware/auth.ts        │ 0.887 │ 12   │
+│ 3    │ validateToken  │ utils/jwt.ts              │ 0.854 │ 89   │
+╰──────────────────────────────────────────────────────────────────╯
+```
+
+---
+
+### Step 5: Advanced Search with Filters
+
+**Filter by entity type:**
+
+```bash
+# Only search in React components
+aica search-code "form validation" --type component
+
+# Only search in functions
+aica search-code "database queries" --type function --limit 10
+```
+
+**Filter by file pattern:**
+
+```bash
+# Search only in API routes
+aica search-code "error handling" --file "src/app/api/**"
+
+# Search in specific feature
+aica search-code "data fetching" --file "src/features/dashboard/**"
+```
+
+**Filter by exported entities only:**
+
+```bash
+# Find only exported utilities
+aica search-code "string utilities" --exported
+```
+
+---
+
+### Step 6: View Full Code Context
+
+**Get syntax-highlighted code:**
+
+```bash
+aica search-code "React hooks for data fetching" --format code --limit 3
+```
+
+**Output:**
+
+```
+╭───────────────────── Result 1 (Score: 0.923) ─────────────────────╮
+│ useUserData (hooks/useUserData.ts:12) — component                 │
+╰────────────────────────────────────────────────────────────────────╯
+
+export function useUserData(userId: string) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch(`/api/users/${userId}`)
+      .then(res => res.json())
+      .then(setData)
+      .finally(() => setLoading(false));
+  }, [userId]);
+
+  return { data, loading };
+}
+```
+
+**Get LLM-friendly context:**
+
+```bash
+aica search-code "authentication flow" --format context > context.txt
+```
+
+This format is optimized for feeding to an LLM for code analysis or generation.
+
+---
+
+### Step 7: Check Index Status
+
+View collection info and configuration:
+
+```bash
+aica embedding-status
+```
+
+**Output:**
+
+```
+╭──────────────────────── Configuration ────────────────────────╮
+│ Setting             │ Value                                    │
+│ ─────────────────── │ ──────────────────────────────────────── │
+│ Qdrant URL          │ http://localhost:6333                    │
+│ Collection          │ aica-code                                │
+│ Embedding Provider  │ ollama                                   │
+│ Embedding Model     │ nomic-embed-text                         │
+│ Batch Size          │ 32                                       │
+│ Vector Dimension    │ 384                                      │
+╰────────────────────────────────────────────────────────────────╯
+```
+
+---
+
+### Step 8: Real-World Use Cases
+
+**Use Case 1: Find Similar Implementations**
+
+```bash
+# You're implementing a new feature and want to see similar patterns
+aica search-code "API endpoint with pagination and filtering" --limit 5
+```
+
+**Use Case 2: Locate Error Handling Patterns**
+
+```bash
+# Find all error handling implementations
+aica search-code "try catch error handling with logging" --type function
+```
+
+**Use Case 3: Discover Reusable Components**
+
+```bash
+# Find modal/dialog components you can reuse
+aica search-code "modal dialog popup" --type component --exported
+```
+
+**Use Case 4: Analyze Security Patterns**
+
+```bash
+# Find authentication and authorization checks
+aica search-code "check user permissions and access control"
+```
+
+---
+
+### Step 9: Incremental Updates (Automatic)
+
+When you modify code and run sync, embeddings are automatically updated:
+
+```bash
+# Make changes to your code
+vim src/auth.service.ts
+
+# Run sync (automatically updates embeddings for changed files)
+aica sync-repo
+```
+
+**Check what updated:**
+
+The sync output will show:
+
+```
+─────────────────── Embedding Sync Summary ───────────────────
+• Deleted: 3 chunks
+• Created: 4 chunks
+• Duration: 1.2s
+```
+
+---
+
+### Step 10: Advanced — Programmatic Search
+
+Use the Python API for custom workflows:
+
+```python
+from pathlib import Path
+from aica.memory.vector_store import search_code, SearchQuery
+
+# Search with filters
+query = SearchQuery(
+    query="database connection pooling",
+    top_k=5,
+    filters={
+        "chunk_type": "function",
+        "exported_only": True,
+        "file_pattern": "src/db/**",
+    }
+)
+
+response = search_code(query)
+
+for result in response.results[:3]:
+    print(f"{result.chunk.metadata.name} ({result.score:.3f})")
+    print(f"  File: {result.chunk.metadata.file}:{result.chunk.metadata.line}")
+    print(f"  Code: {result.chunk.text[:100]}...")
+    print()
+```
+
+---
+
+### Cleanup (Optional)
+
+**Delete the embedding collection:**
+
+```bash
+aica clear-embeddings --force
+```
+
+**Stop services:**
+
+```bash
+docker stop aica-qdrant
+docker stop aica-neo4j
+```
+
+---
+
+### What You Learned
+
+- ✅ Set up Qdrant vector database
+- ✅ Configure embedding provider (Ollama or OpenRouter)
+- ✅ Generate code embeddings with `index-embeddings`
+- ✅ Perform semantic search with `search-code`
+- ✅ Use filters (file pattern, type, exported only)
+- ✅ View results in different formats (table, code, context)
+- ✅ Check index status with `embedding-status`
+- ✅ Understand automatic incremental updates via sync
+- ✅ Use the Python API for programmatic searches
+
+---
+
+### Next Steps
+
+- **Combine with Neo4j queries**: Use semantic search to find candidates, then query Neo4j for their dependencies
+- **Build RAG pipelines**: Use `build_context_from_results()` to create LLM context
+- **Explore different models**: Try `mxbai-embed-large` for better quality or `text-embedding-3-large` for highest accuracy
+- **Custom workflows**: Write Python scripts that combine search with analysis
+
+See the [Embeddings CLI Usage Guide](embeddings-cli-usage.md) for complete command reference.
 
 ---
 

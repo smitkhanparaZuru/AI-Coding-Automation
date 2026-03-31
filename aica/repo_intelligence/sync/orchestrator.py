@@ -9,6 +9,10 @@ from aica.config import get_settings
 from aica.core.logging import get_logger
 from aica.memory.graph_store.incremental_builder import GraphUpdateSummary, update_graph_for_files
 from aica.memory.graph_store.graph_builder import build_dependency_graph
+from aica.memory.vector_store.incremental_updater import (
+    EmbeddingUpdateSummary,
+    update_embeddings_for_files,
+)
 from aica.repo_intelligence.ast.extractors import build_call_graph
 from aica.repo_intelligence.ast.runner import ASTExtractorRunner
 from aica.repo_intelligence.ast.writer import ASTWriter
@@ -63,6 +67,7 @@ class SyncResult:
     base_ref: str
     ast_summary: dict[str, int]
     graph_summary: GraphUpdateSummary
+    embedding_summary: EmbeddingUpdateSummary | None
     duration_seconds: float
 
 
@@ -187,8 +192,8 @@ def _run_incremental_pipeline(
     repo_path: Path,
     changed_files: list[str],
     deleted_files: list[str],
-) -> tuple[dict[str, int], GraphUpdateSummary]:
-    """Run incremental AST + graph updates for changed and deleted files."""
+) -> tuple[dict[str, int], GraphUpdateSummary, EmbeddingUpdateSummary | None]:
+    """Run incremental AST + graph + embedding updates for changed and deleted files."""
     affected_files = sorted(set(changed_files) | set(deleted_files))
 
     try:
@@ -205,13 +210,28 @@ def _run_incremental_pipeline(
         deleted_files=deleted_files,
     )
 
-    return _ast_summary_from_result(ast_result), graph_summary
+    # Embedding update (optional based on config)
+    embedding_summary = None
+    settings = get_settings()
+    if settings.sync_update_embeddings:
+        try:
+            embedding_summary = update_embeddings_for_files(
+                repo_path,
+                changed_files=changed_files,
+                deleted_files=deleted_files,
+            )
+            log.info("embeddings.updated", summary=str(embedding_summary))
+        except Exception as exc:  # noqa: BLE001
+            log.error("embeddings.update_failed", error=str(exc))
+            # Continue with sync even if embedding update fails
+
+    return _ast_summary_from_result(ast_result), graph_summary, embedding_summary
 
 
 def _run_full_pipeline(
     repo_path: Path,
     changed_files: list[str],
-) -> tuple[dict[str, int], GraphUpdateSummary]:
+) -> tuple[dict[str, int], GraphUpdateSummary, EmbeddingUpdateSummary | None]:
     """Run full scanner + AST + graph rebuild and normalize summaries."""
     scan_data = scan_repository(str(repo_path))
     if "error" in scan_data:
@@ -247,7 +267,14 @@ def _run_full_pipeline(
         files_affected=changed_files,
         duration_seconds=0.0,
     )
-    return ast_summary, graph_summary
+
+    # Embedding update (optional based on config)
+    # For full sync, we rely on separate full re-index command
+    # since it's more efficient to rebuild all embeddings at once
+    embedding_summary = None
+    log.info("embeddings.full_sync_skipped", hint="Use 'aica index-embeddings --force' for full re-index")
+
+    return ast_summary, graph_summary, embedding_summary
 
 
 def sync_repository(
@@ -274,12 +301,12 @@ def sync_repository(
     mode: Literal["incremental", "full"] = "full" if run_full else "incremental"
 
     if run_full:
-        ast_summary, graph_summary = _run_full_pipeline(
+        ast_summary, graph_summary, embedding_summary = _run_full_pipeline(
             repo_path,
             changed_files=change_result.real_changed_files,
         )
     else:
-        ast_summary, graph_summary = _run_incremental_pipeline(
+        ast_summary, graph_summary, embedding_summary = _run_incremental_pipeline(
             repo_path,
             changed_files=change_result.real_changed_files,
             deleted_files=change_result.deleted_files,
@@ -299,6 +326,7 @@ def sync_repository(
             files_affected=graph_summary.files_affected,
             duration_seconds=duration_seconds,
         ),
+        embedding_summary=embedding_summary,
         duration_seconds=duration_seconds,
     )
 

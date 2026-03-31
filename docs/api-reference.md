@@ -1044,6 +1044,132 @@ log.debug(
 )
 ```
 
+### Vector Store — Index Code Embeddings
+
+```python
+from pathlib import Path
+from aica.memory.vector_store import index_codebase
+
+# Index a repository
+repo_path = Path("/path/to/nextjs-app")
+summary = index_codebase(repo_path, force_reindex=False)
+
+print(f"Total chunks: {summary.total_chunks}")
+print(f"Embedded: {summary.embedded}")
+print(f"Stored: {summary.stored}")
+print(f"Duration: {summary.duration_seconds:.2f}s")
+
+# Force full reindex (delete existing and rebuild)
+summary = index_codebase(repo_path, force_reindex=True)
+```
+
+### Vector Store — Semantic Code Search
+
+```python
+from aica.memory.vector_store import search_code, SearchQuery
+
+# Basic search
+query = SearchQuery(query="authentication middleware", top_k=5)
+response = search_code(query)
+
+for result in response.results:
+    print(f"Score: {result.score:.3f}")
+    print(f"File: {result.chunk.metadata.file}")
+    print(f"Name: {result.chunk.metadata.name}")
+    print(f"Type: {result.chunk.metadata.chunk_type}")
+    print(f"Code:\n{result.chunk.text[:200]}...\n")
+
+# Search with filters
+query = SearchQuery(
+    query="database queries",
+    top_k=10,
+    filters={
+        "chunk_type": "function",
+        "exported_only": True,
+        "file_pattern": "src/**/*.ts",
+    }
+)
+response = search_code(query)
+
+# Build context for LLM
+from aica.memory.vector_store import build_context_from_results
+
+context = build_context_from_results(response, max_length=8000)
+print(context)
+```
+
+### Vector Store — Qdrant Client Operations
+
+```python
+from aica.memory.vector_store import QdrantClient
+
+# Connect and check status
+client = QdrantClient()
+client.connect()
+
+exists = client.collection_exists()
+print(f"Collection exists: {exists}")
+
+# Get collection info
+if exists:
+    info = client.get_collection_info()
+    print(f"Vectors: {info.vectors_count}")
+    print(f"Dimension: {info.config.params.vectors.size}")
+
+# Manual vector operations
+from aica.memory.vector_store import CodeChunk, ChunkMetadata
+
+chunks = [
+    CodeChunk(
+        id="src/auth.ts:loginUser:function:42",
+        text="export async function loginUser(email, password) { ... }",
+        metadata=ChunkMetadata(
+            file="src/auth.ts",
+            line=42,
+            chunk_type="function",
+            name="loginUser",
+            exported=True,
+        )
+    )
+]
+
+# Generate embeddings and upsert
+from aica.memory.vector_store import EmbeddingProvider
+
+provider = EmbeddingProvider()
+texts = [chunk.text for chunk in chunks]
+embeddings = provider.generate_batch(texts)
+
+for chunk, embedding in zip(chunks, embeddings):
+    chunk.embedding = embedding
+
+client.upsert_chunks(chunks)
+client.close()
+```
+
+### Vector Store — Incremental Updates
+
+```python
+from pathlib import Path
+from aica.memory.vector_store import update_embeddings_for_files
+
+# Update embeddings for changed files (called automatically by sync)
+repo_path = Path("/path/to/repo")
+changed_files = ["src/auth.ts", "src/utils.ts"]
+deleted_files = ["src/old.ts"]
+
+summary = update_embeddings_for_files(
+    repo_path=repo_path,
+    changed_files=changed_files,
+    deleted_files=deleted_files,
+)
+
+print(f"Chunks deleted: {summary.chunks_deleted}")
+print(f"Chunks created: {summary.chunks_created}")
+print(f"Files processed: {len(summary.files_processed)}")
+print(f"Duration: {summary.duration_seconds:.2f}s")
+```
+
 ---
 
 ## Next Steps

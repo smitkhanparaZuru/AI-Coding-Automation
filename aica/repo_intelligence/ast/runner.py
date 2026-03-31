@@ -29,16 +29,18 @@ from aica.repo_intelligence.ast.parser import parse_file
 
 log = get_logger("repo.ast.runner")
 
-_EXCLUDE: frozenset[str] = frozenset({
-    "node_modules",
-    ".next",
-    "dist",
-    "build",
-    "out",
-    ".git",
-    ".aica",
-    ".repo_intelligence",
-})
+_EXCLUDE: frozenset[str] = frozenset(
+    {
+        "node_modules",
+        ".next",
+        "dist",
+        "build",
+        "out",
+        ".git",
+        ".aica",
+        ".repo_intelligence",
+    }
+)
 
 
 def _is_excluded(path: Path, repo_path: Path) -> bool:
@@ -110,10 +112,10 @@ def _rebuild_call_graph(data: dict) -> list[dict]:
         data: Merged data dict with all extracted information.
 
     Returns:
-        Updated calls list. Currently returns unchanged (calls already have file references).
+        Updated calls list with file references from extraction process.
     """
-    # For now, calls are already correct in data['calls'] since each call entry
-    # has a file reference and the import/function data has been refreshed.
+    # Calls are already structured correctly with file references from extraction,
+    # so no additional processing is needed.
     calls = cast(list[dict], data.get("calls", []))
     log.debug("ast.graph_builder.rebuilt_calls", count=len(calls))
     return calls
@@ -148,9 +150,7 @@ class ASTExtractorRunner:
 
         ts_files = sorted(
             p
-            for p in (
-                list(repo_path.rglob("*.ts")) + list(repo_path.rglob("*.tsx"))
-            )
+            for p in (list(repo_path.rglob("*.ts")) + list(repo_path.rglob("*.tsx")))
             if p.is_file() and not _is_excluded(p, repo_path)
         )
 

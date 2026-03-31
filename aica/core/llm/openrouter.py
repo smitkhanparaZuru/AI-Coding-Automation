@@ -62,13 +62,11 @@ class OpenRouterProvider(BaseLLMProvider):
     ) -> None:
         if not model:
             raise ValueError(
-                "OpenRouter model name must not be empty. "
-                "Set AICA_OPENROUTER_MODEL in .env"
+                "OpenRouter model name must not be empty. Set AICA_OPENROUTER_MODEL in .env"
             )
         if not api_key:
             raise LLMAuthError(
-                "OpenRouter API key must not be empty. "
-                "Set AICA_OPENROUTER_API_KEY in .env"
+                "OpenRouter API key must not be empty. Set AICA_OPENROUTER_API_KEY in .env"
             )
         self.model = model
         self._api_key = api_key
@@ -77,10 +75,6 @@ class OpenRouterProvider(BaseLLMProvider):
         self._max_retries = max_retries
         self._retry_min_wait = retry_min_wait
         self._retry_max_wait = retry_max_wait
-
-    # ------------------------------------------------------------------
-    # Private helpers
-    # ------------------------------------------------------------------
 
     @property
     def _url(self) -> str:
@@ -110,10 +104,6 @@ class OpenRouterProvider(BaseLLMProvider):
             wait=wait_exponential(min=self._retry_min_wait, max=self._retry_max_wait),
             reraise=True,
         )
-
-    # ------------------------------------------------------------------
-    # Sync
-    # ------------------------------------------------------------------
 
     def generate(self, prompt: str, **kwargs: object) -> str:
         """Return the complete model response for *prompt*."""
@@ -175,10 +165,6 @@ class OpenRouterProvider(BaseLLMProvider):
                         yield content
             finally:
                 resp.close()
-
-    # ------------------------------------------------------------------
-    # Async
-    # ------------------------------------------------------------------
 
     async def async_generate(self, prompt: str, **kwargs: object) -> str:
         """Async variant of :meth:`generate`."""
