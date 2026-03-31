@@ -66,7 +66,31 @@ This directory contains specialized workflow skills for the AICA project. Each s
 
 ---
 
-### 4. ✅ pre-release-checklist
+### 4. 🔄 sync-workflow
+
+**Complete workflow for incremental repository synchronization**
+
+- Change detection via git + content hashing
+- Incremental vs full mode decision logic
+- Scanner, AST, Graph, Embeddings sync pipeline
+- Fallback threshold configuration
+- CI/CD integration patterns
+- Troubleshooting sync issues
+
+**Invoke:** `/sync-workflow Configure fallback threshold`
+
+**Use when:**
+
+- Syncing code changes incrementally
+- Understanding incremental vs full rebuild modes
+- Configuring sync behavior for your project
+- Integrating AICA into development workflow
+- Setting up CI/CD pipelines with sync
+- Troubleshooting "no changes detected" errors
+
+---
+
+### 5. ✅ pre-release-checklist
 
 **Quality gates before committing or releasing**
 
@@ -87,7 +111,7 @@ This directory contains specialized workflow skills for the AICA project. Each s
 
 ---
 
-### 5. 🌳 ast-extractor-workflow
+### 6. 🌳 ast-extractor-workflow
 
 **Workflow for creating AST extractors**
 
@@ -105,6 +129,30 @@ This directory contains specialized workflow skills for the AICA project. Each s
 - Parsing code patterns
 - Extracting metadata from source
 - Analyzing code structure
+
+---
+
+### 7. 🔍 vector-store-workflow
+
+**Complete workflow for vector embeddings and semantic search**
+
+- Embedding provider setup (Ollama vs OpenRouter)
+- Qdrant vector database configuration
+- Code chunking strategies (functions, components, types)
+- Semantic search with filters and re-ranking
+- Incremental embedding updates
+- CLI commands reference
+
+**Invoke:** `/vector-store-workflow Set up Ollama embeddings`
+
+**Use when:**
+
+- Setting up embeddings and semantic search
+- Configuring Qdrant vector database
+- Implementing custom chunking strategies
+- Building semantic code search queries
+- Testing vector search functionality
+- Incremental embedding updates for changed files
 
 ---
 

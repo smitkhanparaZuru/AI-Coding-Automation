@@ -318,3 +318,4 @@ When an agent is no longer needed:
 - [AICA Coding Guidelines](./copilot-instructions.md)
 - [Detector Workflow Skill](./.github/skills/detector-workflow/SKILL.md)
 - [LLM Provider Testing Skill](./.github/skills/llm-provider-testing/SKILL.md)
+- [Vector Store Workflow Skill](./.github/skills/vector-store-workflow/SKILL.md)

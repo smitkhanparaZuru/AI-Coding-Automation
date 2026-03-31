@@ -563,12 +563,338 @@ client.create_relationship(
 )
 ```
 
+## Incremental Graph Updates
+
+AICA supports **incremental graph updates** via `update_graph_for_files()` for efficient syncing when files change.
+
+### How Incremental Updates Work
+
+**Problem:** Full graph rebuild is slow for large repositories
+
+**Solution:** Delete-then-rebuild pattern for changed files only
+
+**Key features:**
+
+1. **Cross-file dependency detection**: Automatically finds affected files
+2. **Selective deletion**: Removes only nodes from changed files
+3. **Targeted rebuild**: Recreates nodes for changed files, edges for all affected files
+4. **Orphan cleanup**: Removes module nodes with no remaining children
+
+### Workflow
+
+```
+Changed files detected
+    ↓
+Load AST data from disk
+    ↓
+Detect affected files (changed + importers + callers)
+    ↓
+Delete nodes for changed files
+    ↓
+Rebuild nodes for changed files
+    ↓
+Rebuild edges for ALL affected files
+```
+
+### Usage
+
+```python
+from aica.memory.graph_store.incremental_builder import update_graph_for_files
+from pathlib import Path
+
+summary = update_graph_for_files(
+    repo_path=Path("."),
+    changed_files=["src/auth.ts", "src/login.tsx"],
+    deleted_files=["src/old.ts"]
+)
+
+print(f"Nodes deleted: {summary.nodes_deleted}")
+print(f"Nodes created: {summary.nodes_created}")
+print(f"Edges created: {summary.edges_created}")
+print(f"Files affected: {len(summary.files_affected)}")
+```
+
+### Cross-File Dependency Detection
+
+**Why expand beyond changed files?**
+
+When `src/auth.ts` changes:
+
+- Files that **import** `auth.ts` need import edges rebuilt
+- Files that **call** functions from `auth.ts` need call edges rebuilt
+- Otherwise, graph relationships become stale
+
+**Example expansion:**
+
+```
+Changed: [src/auth.ts]
+    ↓
+Importers: [src/login.tsx, src/signup.tsx, src/middleware.ts]
+    ↓
+Callers: [src/pages/dashboard.tsx, src/api/user.ts]
+    ↓
+Affected: [src/auth.ts, src/login.tsx, src/signup.tsx,
+           src/middleware.ts, src/pages/dashboard.tsx, src/api/user.ts]
+```
+
+**Expansion factor:**
+
+```
+expansion_factor = len(affected_files) / len(changed_files)
+
+# Example: 2 changed files → 15 affected files
+# Expansion factor: 7.5x
+```
+
+### Delete-Then-Rebuild Strategy
+
+**Step 1: Delete old subgraph**
+
+```cypher
+// Delete nodes from changed files
+MATCH (n)
+WHERE n.file_path IN $changed_files
+DETACH DELETE n
+
+// Delete orphaned module nodes
+MATCH (m:Module)
+WHERE NOT (m)<-[:DEFINES]-()
+DELETE m
+```
+
+**Step 2: Rebuild nodes for changed files**
+
+```python
+# Only rebuild nodes for files that actually changed
+for changed_file in changed_files:
+    # Create File node
+    file_node = build_file_node(changed_file)
+    client.create_node(file_node)
+
+    # Create Function, Component, Type, Hook nodes
+    functions = get_functions_from_ast(changed_file)
+    for func in functions:
+        node = build_function_node(func, changed_file)
+        client.create_node(node)
+```
+
+**Step 3: Rebuild edges for ALL affected files**
+
+```python
+# Rebuild import edges for everyone who imports changed files
+for affected_file in affected_files:
+    imports = get_imports_from_ast(affected_file)
+    for imp in imports:
+        insert_import_edges(client, affected_file, imp)
+
+# Rebuild call edges for everyone who calls changed functions
+for affected_file in affected_files:
+    calls = get_calls_from_ast(affected_file)
+    for call in calls:
+        insert_call_edges(client, affected_file, call)
+```
+
+### Integration with Sync System
+
+Incremental graph updates are automatically triggered by `aica sync-repo`:
+
+```bash
+# Incremental mode (< 20% files changed)
+aica sync-repo
+# → Calls update_graph_for_files() internally
+
+# Full mode (≥ 20% files changed)
+aica sync-repo --force-full
+# → Calls build_dependency_graph() instead
+```
+
+**Configuration:**
+
+```env
+# Maximum age for AST artifacts before incremental update
+AICA_SYNC_MAX_AST_AGE_SECONDS=259200  # 3 days
+
+# If AST artifacts older than this, incremental update fails
+# Must re-run: aica index-code
+```
+
+### Extending Incremental Updates
+
+When adding new node/relationship types, update incremental builder:
+
+**Location:** `aica/memory/graph_store/incremental_builder.py`
+
+**Add node creation:**
+
+```python
+def _rebuild_nodes_for_files(
+    client: Neo4jClient,
+    changed_files: list[str],
+    ast_dir: Path
+) -> dict[str, int]:
+    """Rebuild nodes for changed files only."""
+
+    counts = {
+        "files": 0,
+        "functions": 0,
+        "components": 0,
+        "types": 0,
+        "hooks": 0,
+        # Add your new node type
+        "middlewares": 0,  # <-- Add this
+    }
+
+    # Existing node builders...
+
+    # Add your node builder
+    middlewares_data = load_json(ast_dir / "middlewares.json")  # If AST-based
+    for mw in middlewares_data:
+        if mw["file"] in changed_files:
+            node = build_middleware_node(mw, repo_path)
+            client.create_node(node)
+            counts["middlewares"] += 1
+
+    return counts
+```
+
+**Add edge creation:**
+
+```python
+def _rebuild_edges_for_files(
+    client: Neo4jClient,
+    affected_files: list[str],
+    ast_dir: Path,
+    repo_path: Path
+) -> dict[str, int]:
+    """Rebuild edges for all affected files."""
+
+    counts = {
+        "imports": 0,
+        "calls": 0,
+        # Add your new relationship type
+        "protects": 0,  # <-- Add this
+    }
+
+    # Existing edge builders...
+
+    # Add your edge builder
+    middlewares = load_json(ast_dir / "middlewares.json")
+    for mw in middlewares:
+        if mw["file"] in affected_files:
+            # Recreate PROTECTS relationships
+            for protected_route in mw.get("protected_routes", []):
+                create_protects_edge(client, mw, protected_route)
+                counts["protects"] += 1
+
+    return counts
+```
+
+### Troubleshooting Incremental Updates
+
+**"AST artifacts too old":**
+
+```
+Error: AST artifacts are 4 days old (max age: 3 days)
+```
+
+**Solution:**
+
+```bash
+aica index-code  # Re-run AST extraction
+aica sync-repo   # Then sync
+```
+
+**Unexpected expansion factor:**
+
+```
+ℹ Expanded 2 changed files → 50 affected files (25x)
+```
+
+**Cause:** Changed file is heavily imported (e.g., `utils.ts`, `types.ts`)
+
+**This is expected behavior** — ensures graph stays accurate.
+
+**Missing relationships after sync:**
+
+**Cause:** Edge builder not included in `_rebuild_edges_for_files()`
+
+**Solution:** Add edge creation logic for all affected files, not just changed files.
+
+### Performance Characteristics
+
+**Incremental update time:**
+
+```
+2 changed files → 15 affected files
+- Node deletion: <100ms
+- Node creation: ~200ms
+- Edge creation: ~500ms
+Total: <1 second
+```
+
+**Full rebuild time:**
+
+```
+1000 total files
+- Node creation: ~30 seconds
+- Edge creation: ~45 seconds
+Total: ~75 seconds
+```
+
+**Speedup:** 75x faster for small changes!
+
+### Best Practices
+
+✅ **Always expand to affected files for edges:**
+
+```python
+# Rebuild edges for ALL affected files
+for affected_file in affected_files:
+    rebuild_edges(affected_file)
+```
+
+✅ **Load AST data once, reuse:**
+
+```python
+ast_data = _load_all_ast_data(ast_dir)
+imports = ast_data["imports"]
+calls = ast_data["calls"]
+```
+
+✅ **Handle missing AST files gracefully:**
+
+```python
+try:
+    functions = load_json(ast_dir / "functions.json")
+except FileNotFoundError:
+    log.warning("ast.missing", file="functions.json")
+    functions = []
+```
+
+❌ **Don't rebuild edges only for changed files:**
+
+```python
+# WRONG: Misses cross-file dependencies
+for changed_file in changed_files:
+    rebuild_edges(changed_file)  # Incomplete!
+```
+
+❌ **Don't skip orphan cleanup:**
+
+```python
+# WRONG: Leaves stale module nodes
+# Always clean up orphaned modules after deletion
+```
+
 ## Related Resources
 
 - [Neo4j Cypher Manual](https://neo4j.com/docs/cypher-manual/)
 - [Schema Definitions](../../aica/memory/graph_store/schema.py)
 - [Node Builder](../../aica/memory/graph_store/node_builder.py)
 - [Neo4j Client](../../aica/memory/graph_store/neo4j_client.py)
+- [Incremental Builder](../../aica/memory/graph_store/incremental_builder.py)
+- [Cross-File Detector](../../aica/memory/graph_store/cross_file_detector.py)
+- [Sync Workflow Skill](../sync-workflow/SKILL.md) — Complete sync system guide
 - [Existing Builders](../../aica/memory/graph_store/) - Reference implementations
 
 ## Example Invocation

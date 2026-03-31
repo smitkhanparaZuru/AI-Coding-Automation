@@ -114,6 +114,7 @@ AICA provides specialized workflow skills (invoked with `/skill-name`) for step-
 | `/graph-schema-extension` | Extending Neo4j graph schema          | Adding nodes/relationships to graph       |
 | `/pre-release-checklist`  | Quality validation before commit/PR   | Before committing, pre-merge checks       |
 | `/ast-extractor-workflow` | Creating AST code extractors          | Parsing TypeScript/JS patterns            |
+| `/vector-store-workflow`  | Vector embeddings & semantic search   | Setting up embeddings, Qdrant, chunking   |
 
 **Recommended workflow:**
 

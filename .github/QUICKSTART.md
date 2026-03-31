@@ -11,13 +11,15 @@
 
 ## 📚 Skills (for workflow guidance)
 
-| Skill                     | Purpose                    | Invoke                                         |
-| ------------------------- | -------------------------- | ---------------------------------------------- |
-| `/detector-workflow`      | Detector development steps | `/detector-workflow middleware detector`       |
-| `/llm-provider-testing`   | Provider test guide        | `/llm-provider-testing validate streaming`     |
-| `/graph-schema-extension` | Add graph nodes/rels       | `/graph-schema-extension add middleware nodes` |
-| `/pre-release-checklist`  | Quality validation         | `/pre-release-checklist`                       |
-| `/ast-extractor-workflow` | AST extraction guide       | `/ast-extractor-workflow extract hooks`        |
+| Skill                     | Purpose                      | Invoke                                         |
+| ------------------------- | ---------------------------- | ---------------------------------------------- |
+| `/detector-workflow`      | Detector development steps   | `/detector-workflow middleware detector`       |
+| `/llm-provider-testing`   | Provider test guide          | `/llm-provider-testing validate streaming`     |
+| `/graph-schema-extension` | Add graph nodes/rels         | `/graph-schema-extension add middleware nodes` |
+| `/sync-workflow`          | Incremental sync guide       | `/sync-workflow configure threshold`           |
+| `/vector-store-workflow`  | Embeddings & semantic search | `/vector-store-workflow setup Qdrant`          |
+| `/pre-release-checklist`  | Quality validation           | `/pre-release-checklist`                       |
+| `/ast-extractor-workflow` | AST extraction guide         | `/ast-extractor-workflow extract hooks`        |
 
 ## 🎯 Common Workflows
 
@@ -60,6 +62,18 @@
 3. Integrate with runner.py
 4. pytest tests/test_extractor.py
 5. /pre-release-checklist
+```
+
+### Development Loop (Sync Workflow)
+
+```
+1. Make code changes                    # Edit TypeScript/TSX files
+2. aica sync-repo                       # Incremental sync (<1 sec)
+3. aica search-code "your query"        # Verify changes indexed
+4. git add . && git commit              # Commit when ready
+
+# After feature branch merge
+aica sync-repo --base main              # Sync against main
 ```
 
 ## 🔍 Quick Commands
